@@ -1,0 +1,86 @@
+---
+title: "Semi-automated library generation; QTOF LC-MS/MS data"
+format: html
+tbl-cap-location: bottom
+editor: visual
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+# Introduction
+
+In this document we perform the preprocessing and analysis of the QTOF LC-MS/MS
+data.
+
+# Data import
+
+We first load all required R packages for the analysis in this document.
+
+```{r}
+#| message: false
+
+#' Load required libraries
+library(xcms)
+library(MsExperiment)
+library(Spectra)
+library(readxl)
+library(pander)
+```
+
+Next we read the LC-MS/MS data from the mzXML data files.
+
+```{r}
+#' Read the table with the data files
+sample_data <- read_xlsx("data/qtof_data_files.xlsx") |>
+    as.data.frame()
+
+#' Define the file path where the mzXML files are located
+fp <- "data/mzXML/"
+
+#' Import the MS data
+qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
+                         sampleData = sample_data)
+qtof
+```
+
+The data files analyzed here are listed below.
+
+```{r, results = "asis"}
+pandoc.table(sampleData(qtof), caption = "Data files",
+             split.table = Inf, style = "rmarkdown")
+```
+
+The number of MS1 and MS2 spectra in the present data set are listed below:
+
+```{r}
+msLevel(spectra(qtof)) |>
+    table()
+```
+
+
+# Data evaluation
+
+## General data overview
+
+- check
+  https://rformassspectrometry.github.io/Metabonaut/articles/a-end-to-end-untargeted-metabolomics.html#data-visualization-and-general-quality-assessment
+  for examples and code.
+- base peaks chromatogram
+- total ion chromatogram
+- Q: is there any need to filter on retention time range?
+- heatmap of binned chromatograms
+- Q: do the chromatograms of the individual samples look comparable?
+
+## Evaluate precursor m/z values
+
+- Compare reported precursor m/z values with estimated ones (i.e., use
+  `precursorMz(qtof)` to get the reported precursor m/z and
+  `estimatePrecursorMz(qtof)` to get the estimated precursor m/z; maybe plot
+  these against each other, or calculate the difference).
+
+# Data preprocessing
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
