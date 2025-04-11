@@ -1,0 +1,318 @@
+---
+title: "Semi-automated library generation; QTOF LC-MS/MS data"
+format: html
+tbl-cap-location: bottom
+editor: visual
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+# Introduction
+
+The QTOF data of the present project was converted from Waters raw files, but
+this data has an unexpectedly large number of spectra as well as spectra with
+negative intensities. In addition, spikes are visible in the base peak
+chromatogram (BPC) along the full retention time range suggesting the presence
+of lock mass peaks. In this document we closely inspect the raw data of the
+experiment to understand and eventually clean and correct the data.
+
+# Data import
+
+```{r}
+#| message: false
+
+#' Load required libraries
+library(xcms)
+library(MsExperiment)
+library(Spectra)
+library(readxl)
+library(pander)
+```
+
+Next we read the LC-MS/MS data from the mzXML data files.
+
+```{r}
+#' Read the table with the data files
+sample_data <- read_xlsx("data/qtof_data_files.xlsx") |>
+    as.data.frame()
+
+#' We drop the blank data file
+sample_data <- sample_data[sample_data$sample_name != "blank", ]
+
+#' Define the file path where the mzXML files are located
+fp <- "data/mzXML/"
+
+#' Import the MS data
+qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
+                         sampleData = sample_data)
+qtof
+```
+
+The data files analyzed here are listed below.
+
+```{r, results = "asis"}
+pandoc.table(as.data.frame(sampleData(qtof)), caption = "Data files",
+             split.table = Inf, style = "rmarkdown")
+```
+
+# The problem
+
+The BPC looks definitely not OK for this data:
+
+```{r}
+chr <- chromatogram(qtof, aggregationFun = "max")
+plot(chr, col = "#00000080")
+```
+
+# Raw data inspection
+
+We first subset the data to a single sample and evaluate the mass peaks.
+
+```{r}
+#' focus on one sample
+a <- qtof[6]
+
+range(rtime(a))
+```
+
+Range of retention time is quite large. We next extract the full MS data from
+this file.
+
+```{r}
+#' check the MS1 and MS2 data
+ms1_pks <- peaksData(filterMsLevel(spectra(a), 1L))
+ms2_pks <- peaksData(filterMsLevel(spectra(a), 2L))
+```
+
+An overview of number of peaks per spectrum:
+
+```{r}
+quantile(vapply(ms1_pks, nrow, NA_integer_))
+```
+
+Strangely, most spectra have exactly the same number of peaks.
+
+```{r}
+quantile(vapply(ms2_pks, nrow, NA_integer_))
+```
+
+MS2 data looks a bit more balanced.
+
+So, what are the MS1 spectra with 191 peaks? Let's separate them from the other
+MS1 spectra.
+
+```{r}
+#' Filter the data to MS1 spectra that have 191 peaks
+a_191 <- filterSpectra(a, function(x) {
+    x <- filterMsLevel(x, 1L)
+    x[lengths(x) == 191]
+})
+a_191
+
+#' Filter the data set removing these spectra, i.e. keep all MS2 spectra and
+#' all MS1 spectra with more than 191 peaks
+a <- filterSpectra(a, function(x) {
+    keep <- msLevel(x) == 2L | lengths(x) > 191
+    x[keep]
+})
+a
+```
+
+Creating BPC for these:
+
+```{r}
+bpc_a_191 <- chromatogram(a_191, aggregationFun = "max")
+bpc_a <- chromatogram(a, aggregationFun = "max")
+
+par(mfrow = c(2, 1))
+plot(bpc_a_191)
+plot(bpc_a)
+```
+
+The BPC for the data without the 191 spectra looks now better, but there are
+still the *spikes*. Evaluating the range of intensities for the two separate
+data sets:
+
+```{r}
+spectra(a_191) |>
+    intensity() |>
+    unlist() |>
+    quantile()
+
+spectra(a) |>
+    intensity() |>
+    unlist() |>
+    quantile()
+```
+
+So, the 191 peaks-spectra have positive **and** negative intensities. The other
+spectra are OK.
+
+Is there maybe any information available in one of the spectra variables that
+can explain the differences between these spectra?
+
+```{r}
+spectra(a_191) |>
+    spectraData()
+```
+
+```{r}
+spectra(a) |>
+    spectraData()
+```
+
+The only difference is that all spectra with 191 peaks are not centroided, while
+the others are:
+
+```{r}
+spectra(a_191) |>
+    centroided() |>
+    table()
+
+spectra(a) |>
+    centroided() |>
+    table()
+```
+
+We next evaluate the retention times of the two sets, or rather, the difference
+in retention times between consecutive scans.
+
+```{r}
+spectra(a_191) |>
+    rtime() |>
+    diff() |>
+    quantile()
+
+```
+
+Thus, the difference in retention time between two spectra is 0.05 seconds.
+
+```{r}
+spectra(a) |>
+    rtime() |>
+    diff() |>
+    quantile()
+```
+
+For the *real* data set the difference is between 250 and 500 milliseconds,
+which is a bit more realistic for a QTOF data set.
+
+We next check this on the full data set.
+
+```{r}
+spectra(qtof) |>
+    centroided() |>
+    table()
+```
+
+We split the data to centroided/non-centroided data.
+
+```{r}
+#' non-centroided data
+qtof_nc <- filterSpectra(qtof, function(x) x[!centroided(x)])
+qtof_nc
+
+#' centroided data
+qtof <- filterSpectra(qtof, function(x) x[centroided(x)])
+qtof
+```
+
+We create next the BPC for the data containing only the centroided data.
+
+```{r}
+bpc <- chromatogram(qtof, aggregationFun = "max")
+plot(bpc, col = "#00000040")
+```
+
+The next question is whether we can understand what the *spikes* along the
+retention time axis actually represent. To this end we first focus on a region
+along the retention time where we only see the spikes, but not other signal.
+
+```{r}
+par(mfrow = c(1, 2))
+plot(bpc_a, xlim = c(1000, 1100))
+plot(bpc_a, xlim = c(1029, 1031))
+grid()
+```
+
+We next extract the MS1 spectra between 1029.5 and 1030 seconds.
+
+```{r}
+spike_ms1 <- spectra(a) |>
+    filterMsLevel(1L) |>
+    filterRt(c(1029.5, 1030))
+spike_ms1
+```
+
+So, we have a single spectrum that we can now plot to evaluate which mass peaks
+might be present.
+
+```{r}
+plotSpectra(spike_ms1)
+lockmass_neg <- 554.2615
+abline(v = lockmass_neg, col = "#ff000040")
+
+```
+
+This scan thus contains the lock mass (the largest mass peak overlaps with the
+theoretical m/z of the lockmass shown with a dashed red line in the spectrum
+above). Question is whether we should remove the whole scan or just the peak?
+We would need to find a way to identify the spectra containing the lock mass
+scan and remove them from the data set.
+
+```{r}
+containsMz(spike_ms1, mz = lockmass_neg, ppm = 10)
+
+.peaks_contain_mz_intensity <- function(x, mz = 554.2615, tolerance = 0,
+                                        ppm = 10, intensity = 0, condFun = any,
+                                        ...) {
+    p <- MsCoreUtils::common(mz, x[, "mz"], tolerance = tolerance, ppm = ppm)
+    if (any(p))
+        p <- x[p, "intensity"] > intensity
+    condFun(p)
+}
+
+#' Get the lock mass spectra
+qtof_lm <- filterSpectra(qtof, function(x) {
+    keep <- msLevel(x) == 1L &
+        unlist(Spectra:::.peaksapply(x, .peaks_contain_mz_intensity,
+                                     mz = lockmass_neg, ppm = 20,
+                                     intensity = 50000))
+    x[keep]
+})
+qtof_lm
+
+#' Remove the lock mass spectra from the full data set
+qtof <- filterSpectra(qtof, function(x) {
+    keep <- msLevel(x) != 1L |
+        !unlist(Spectra:::.peaksapply(x, .peaks_contain_mz_intensity,
+                                      mz = lockmass_neg, ppm = 20,
+                                      intensity = 50000))
+    x[keep]
+})
+qtof
+```
+
+Now, creating the BPC again:
+
+```{r}
+#' Lockmass-cleaned data
+bpc_2 <- chromatogram(qtof)
+
+par(mfrow = c(2, 1))
+plot(bpc)
+plot(bpc_2)
+```
+
+Looks better, but still not perfect.
+
+
+
+# Precursor m/z correction
+
+The *Spectra* package provides the `estimatePrecursorMz()` function that
+*estimates* the precursor m/z based on the m/z value of the (most likely) mass
+peak from the previous MS1 scan.
+
+Alternatively, we could use this
+[tool](https://github.com/elnurgar/mzxml-precursor-corrector) for correcting the
+precursor m/z.
