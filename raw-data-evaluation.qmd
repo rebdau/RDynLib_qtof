@@ -39,7 +39,7 @@ sample_data <- read_xlsx("data/qtof_data_files.xlsx") |>
 sample_data <- sample_data[sample_data$sample_name != "blank", ]
 
 #' Define the file path where the mzXML files are located
-fp <- "data/mzXML/"
+fp <- "data/mzML/"
 
 #' Import the MS data
 qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
@@ -47,11 +47,173 @@ qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
 qtof
 ```
 
+
 The data files analyzed here are listed below.
 
 ```{r, results = "asis"}
 pandoc.table(as.data.frame(sampleData(qtof)), caption = "Data files",
              split.table = Inf, style = "rmarkdown")
+```
+
+# Data inspection
+
+We next aim to get a closer look into the data, ideally extracting signal for
+individual ions (of a certain compound present in the sample) that will help us
+defining the settings for the chromatographic peak detection. In particular, we
+would like to know the width in retention time dimension, that will depend on
+the liquid chromatography (LC) settings used for the present data set. Without
+prior knowledge of the data, we need to try to find some signal to look at. We
+first extract the BPC of our data.
+
+```{r}
+bpc <- chromatogram(qtof, aggregationFun = "max")
+
+plot(bpc)
+
+
+```
+
+We next clean the data set filtering to a retention time range of 0-900 seconds,
+remove 0 intensity peaks and and remove empty spectra.
+
+```{r}
+qtof <- filterSpectra(qtof, filterRt, c(0, 900))
+spectra(qtof) |>
+    msLevel() |>
+    table()
+
+qtof <- filterSpectra(qtof, filterIntensity, c(0.1, Inf))
+qtof <- filterSpectra(qtof, filterEmptySpectra)
+spectra(qtof) |>
+    msLevel() |>
+    table()
+```
+
+Now we extract the BPC again.
+
+```{r}
+bpc <- chromatogram(qtof, aggregationFun = "max")
+plot(bpc)
+grid()
+abline(v = 390, col = "red", lty = 2)
+```
+
+We focus next on the highest signal in the BPC, which is around 390 seconds in
+the present data set (the dashed red line in the BPC above).
+
+The BPC represents the signal from a m/z of 0 to 1000, thus, next we would like
+to understand what m/z the ion generating the signal at about 390 seconds
+has. For that we next want to extract the MS1 spectrum closest to that retention
+time from the data set.
+
+Extract a MS1 spectrum close to the retention time of 390 seconds.
+
+```{r}
+#' Get spectrum closest to a retention time of 390 seconds
+#' calculate the absolute difference between the retention times of
+#' all spectra with that of the expected retention time (390)
+rtdiff <- abs(rtime(qtof) - 390)
+
+#' Get the index for the spectrum closest to that value
+idx <- which.min(rtdiff)
+
+#' Extract the spectrum closest to the rt 390
+s <- spectra(qtof)[idx]
+
+#' Plot the MS1 spectrum
+par(mfrow = c(2, 2))
+plotSpectra(s)
+grid()
+#' Zoom into the region with the highest mass peak
+plotSpectra(s, xlim = c(440, 454))
+#' Focus on the isotope peaks
+plotSpectra(s, xlim = c(449, 452))
+#' Focus on the largest peak
+plotSpectra(s, xlim = c(449, 449.4))
+
+#' Define the m/z range
+mzr <- c(449, 449.4)
+
+```
+
+Now, having the m/z range of the largest signal around the retention time of 390
+seconds defined, we extract the ion signal for that m/z range from the full
+retention time range.
+
+```{r}
+a <- chromatogram(qtof, mz = mzr, aggregationFun = "max")
+par(mfrow = c(1, 3))
+plot(a)
+grid()
+
+#' Focus on the retention time range with the highest signal
+plot(a, xlim = c(230, 300))
+
+#' Plot it for a single sample
+plot(a[, 1], xlim = c(230, 300))
+```
+
+The signal looks nice. We could now also use this EIC to determine the expected
+peak width in retention time dimension. But we will use the `findChromPeaks()`
+on the extracted ion trace below for that instead. Also, we inspect the full MS
+data for that m/z and retention time range:
+
+```{r}
+tmp <- filterMz(qtof, mz = mzr) |>
+    filterRt(rt = c(260, 290))
+plot(tmp[1])
+```
+
+Next we run the chromatographic peak detection on that extracted ion
+chromatogram. In a previous run we used `peakwidth = c(5, 20)` which detected
+also peaks in the noise range (see also explanation below). In addition, we use
+`integrate = 2` to correctly detect and define the chromatographic peak
+boundaries.
+
+```{r}
+a_2 <- findChromPeaks(a, CentWaveParam(peakwidth = c(8, 20), integrate = 2))
+```
+
+We next extract the identified chromatographic peaks with the `chromPeaks()`
+function and calculate the distribution of the peak width in that data subset.
+
+```{r}
+pks <- chromPeaks(a_2)
+head(pks)
+quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
+```
+
+Thus, the average peak width is about 18 seconds. We can also visually inspect
+these peaks to see if we agree with the results. Here we focus on the retention
+time range containing the largest signal.
+
+```{r}
+par(mfrow = c(1, 2))
+#' In one sample
+plot(a_2[, 1], xlim = c(230, 300))
+#' In all samples
+plot(a_2[, 1:5], xlim = c(230, 300))
+```
+
+And the same for another region along the retention time range.
+
+```{r}
+plot(a_2[, 1], xlim = c(370, 400))
+plot(a_2[, 1:5], xlim = c(370, 400))
+```
+
+Peak detection results seem to be OK.  A potential justification to use
+`peakwidth = c(8, 20)` instead of `peakwidth = c(5, 20)` could be that we find
+less small *artefact* peaks.
+
+
+Eventually we could try another m/z range...
+
+```{r}
+plot(bpc)
+grid()
+abline(v = c(800, 850), col = "grey")
+plot(bpc[, 1], xlim = c(800, 850))
 ```
 
 # The problem
