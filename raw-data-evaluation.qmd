@@ -8,7 +8,12 @@ date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
 
 # Introduction
 
-The QTOF data of the present project was converted from Waters raw files, but this data has an unexpectedly large number of spectra as well as spectra with negative intensities. In addition, spikes are visible in the base peak chromatogram (BPC) along the full retention time range suggesting the presence of lock mass peaks. In this document we closely inspect the raw data of the experiment to understand and eventually clean and correct the data.
+The QTOF data of the present project was converted from Waters raw files, but
+this data has an unexpectedly large number of spectra as well as spectra with
+negative intensities. In addition, spikes are visible in the base peak
+chromatogram (BPC) along the full retention time range suggesting the presence
+of lock mass peaks. In this document we closely inspect the raw data of the
+experiment to understand and eventually clean and correct the data.
 
 # Data import
 
@@ -28,8 +33,11 @@ library(pheatmap)
 Next we read the LC-MS/MS data from the mzXML data files.
 
 ```{r}
+#' Define the directory containing the data
+pth <- "C:/Users/amentag/Desktop/these/Ahlam/these/RebeccaFastDDAJuin2023.PRO/Data"
+
 #' Read the table with the data files
-sample_data <- read_xlsx("C:/Users/amentag/Desktop/these/Ahlam/these/RebeccaFastDDAJuin2023.PRO/Data/sample_data/qtof_data_files.xlsx") |>
+sample_data <- read_xlsx(file.path(pth, "/sample_data/qtof_data_files.xlsx")) |>
     as.data.frame()
 
 #' We drop the blank data file
@@ -85,8 +93,8 @@ spectra(qtof) |>
 ```{r}
 library(RColorBrewer)
 # colors
-col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]  
-names(col_sample_id) <- unique(sample_data$sample_id) 
+col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]
+names(col_sample_id) <- unique(sample_data$sample_id)
 # Assigne colors for each single name in the sample_id
 names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc")
 col_sample <- col_sample_id[sample_data$sample_id]
@@ -286,8 +294,8 @@ fill in missing peaks
   #' Definition of the features
   featureDefinitions(a2_grp2) |>
     head()
-  
- 
+
+
 ```
 
 retention time before and after alignement
@@ -303,8 +311,8 @@ Setting colors for the BPC
 ```{r}
 library(RColorBrewer)
 # colors
-col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6)]  
-names(col_sample_id) <- unique(sample_data$sample_id) 
+col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6)]
+names(col_sample_id) <- unique(sample_data$sample_id)
 # Assigne colors for each single name in the sample_id
 names(col_sample_id) <- c("S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc")
 col_sample <- col_sample_id[sample_data$sample_id]
@@ -335,10 +343,10 @@ Feature Matrix creation
 #`with x is the mzmed of each feature and y is the rtmed of each feature
 
 final_feature_matrix <- data.frame(
-  `rt(min)` = corrected_features$rtmed / 60, 
-  mzmed = corrected_features$mzmed,         
-  feature_name = paste0(                     
-    "M", round(corrected_features$mzmed, 0), 
+  `rt(min)` = corrected_features$rtmed / 60,
+  mzmed = corrected_features$mzmed,
+  feature_name = paste0(
+    "M", round(corrected_features$mzmed, 0),
     "T", round(corrected_features$rtmed, 0)
   )
 )
