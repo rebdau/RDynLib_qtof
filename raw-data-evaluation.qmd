@@ -22,7 +22,7 @@ library(Spectra)
 library(readxl)
 library(pander)
 library(dplyr)
-
+library(pheatmap)
 ```
 
 Next we read the LC-MS/MS data from the mzXML data files.
@@ -42,6 +42,10 @@ fp <- "C:/Users/amentag/Desktop/these/Ahlam/these/RebeccaFastDDAJuin2023.PRO/Dat
 qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
                          sampleData = sample_data)
 qtof
+```
+
+```{r}
+sample_data
 ```
 
 The data files analyzed here are listed below.
@@ -76,6 +80,31 @@ qtof <- filterSpectra(qtof, filterEmptySpectra)
 spectra(qtof) |>
     msLevel() |>
     table()
+```
+
+```{r}
+library(RColorBrewer)
+# colors
+col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]  
+names(col_sample_id) <- unique(sample_data$sample_id) 
+# Assigne colors for each single name in the sample_id
+names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc")
+col_sample <- col_sample_id[sample_data$sample_id]
+```
+
+heatmap
+
+```{r}
+tic <- chromatogram(qtof, aggregationFun = "sum") |>
+  bin(binSize = 2)
+#' Calculate similarity (Pearson correlation) between BPCs
+ticmap <- do.call(cbind, lapply(tic, intensity)) |> cor()
+rownames(ticmap) <- colnames(ticmap) <- sampleData(qtof)$sample_name
+ann <- data.frame(sample_id = sampleData(qtof)[, "sample_id"])
+rownames(ann) <- rownames(ticmap)
+#'Plot heatmap
+pheatmap(ticmap, annotation_col = ann,
+         annotation_colors = list(sample_id = col_sample_id))
 ```
 
 Now we extract the BPC again.
