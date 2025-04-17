@@ -24,6 +24,8 @@ library(MsExperiment)
 library(Spectra)
 library(readxl)
 library(pander)
+library(dplyr)
+library(pheatmap)
 ```
 
 Next we read the LC-MS/MS data from the mzXML data files.
@@ -33,8 +35,11 @@ Next we read the LC-MS/MS data from the mzXML data files.
 sample_data <- read_xlsx("data/qtof_data_files.xlsx") |>
     as.data.frame()
 
+#' We drop the blank data file
+sample_data <- sample_data[sample_data$sample_name != "blank", ]
+
 #' Define the file path where the mzXML files are located
-fp <- "data/mzXML/"
+fp <- "data/mzML/"
 
 #' Import the MS data
 qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
@@ -61,14 +66,102 @@ msLevel(spectra(qtof)) |>
 
 ## General data overview
 
-- check
-  https://rformassspectrometry.github.io/Metabonaut/articles/a-end-to-end-untargeted-metabolomics.html#data-visualization-and-general-quality-assessment
-  for examples and code.
-- base peaks chromatogram
-- total ion chromatogram
-- Q: is there any need to filter on retention time range?
-- heatmap of binned chromatograms
-- Q: do the chromatograms of the individual samples look comparable?
+We next aim to get a closer look into the data, ideally extracting signal for
+individual ions (of a certain compound present in the sample) that will help us
+defining the settings for the chromatographic peak detection. In particular, we
+would like to know the width in retention time dimension, that will depend on
+the liquid chromatography (LC) settings used for the present data set. Without
+prior knowledge of the data, we need to try to find some signal to look at. We
+first extract the BPC of our data.
+
+```{r}
+bpc <- chromatogram(qtof, aggregationFun = "max")
+
+plot(bpc, col = col_sample)
+```
+
+We next clean the data set filtering to a retention time range of 0-900
+seconds. With the newly converted MS data, we no longer need to filter
+0-intensity peaks and empty spectra. Below we list the number of MS1 and MS2
+spectra for the filtered data set.
+
+```{r}
+qtof <- filterSpectra(qtof, filterRt, c(0, 900))
+spectra(qtof) |>
+    msLevel() |>
+    table()
+
+```
+
+We next define the colors for the various sample gorups.
+
+```{r}
+library(RColorBrewer)
+# colors
+col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]
+names(col_sample_id) <- unique(sample_data$sample_id)
+# Assigne colors for each single name in the sample_id
+names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc",
+                          "S9Ra", "S9Rb", "S9Rc")
+col_sample <- col_sample_id[sample_data$sample_id]
+```
+
+We next extract a total ion chromatogram (TIC) and base peak chromatogram (BPC)
+and calculate the similarities between these to evaluate similarity in the
+performance of the liquid chromatography.
+
+```{r}
+tic <- chromatogram(qtof, aggregationFun = "sum")
+#' Calculate similarity (Pearson correlation) between BPCs
+ticmap <- bin(tic, binSize = 2) |>
+    lapply(intensity) |>
+    do.call(what = cbind) |>
+    cor()
+
+rownames(ticmap) <- colnames(ticmap) <- sampleData(qtof)$sample_name
+ann <- data.frame(sample_id = sampleData(qtof)[, "sample_id"])
+rownames(ann) <- rownames(ticmap)
+#' Plot heatmap
+pheatmap(ticmap, annotation_col = ann,
+         annotation_colors = list(sample_id = col_sample_id))
+
+```
+
+We don't see a clear grouping of the replicated samples. There seems to be some
+grouping of the S1 and S9 samples. The total ion chromatograms of the data set
+is shown below. The separation/grouping of the samples might most likely be due
+to the difference in the signal observed after 800 seconds.
+
+```{r}
+plot(tic, col = paste0(col_sample, 80), main = "TIC")
+```
+
+We repeat this analysis also for the BPC.
+
+```{r}
+bpc <- chromatogram(qtof, aggregationFun = "max")
+#' Calculate similarity (Pearson correlation) between BPCs
+bpcmap <- bin(bpc, binSize = 2) |>
+    lapply(intensity) |>
+    do.call(what = cbind) |>
+    cor()
+
+rownames(bpcmap) <- colnames(bpcmap) <- sampleData(qtof)$sample_name
+ann <- data.frame(sample_id = sampleData(qtof)[, "sample_id"])
+rownames(ann) <- rownames(bpcmap)
+#' Plot heatmap
+pheatmap(bpcmap, annotation_col = ann,
+         annotation_colors = list(sample_id = col_sample_id))
+
+```
+
+The grouping is clearer with the base peak signal. S1Rc and S9Rb samples seem to
+be similar.
+
+```{r}
+plot(bpc, col = paste0(col_sample, 80), main = "BPC")
+```
+
 
 ## Evaluate precursor m/z values
 
@@ -78,6 +171,234 @@ msLevel(spectra(qtof)) |>
   these against each other, or calculate the difference).
 
 # Data preprocessing
+
+To derive the settings for the chromatographic peak detection for the present
+data set we below extract the ion signal for a m/z range which might contain
+signal from some ions. Definition of this m/z range is described in
+[raw-data-evaluation.qmd](raw-data-evaluation.qmd).
+
+Below we extract the ion chromatogram for one example m/z range.
+
+```{r}
+mzr <- c(449.08, 449.12)
+
+a <- chromatogram(qtof, mz = mzr, aggregationFun = "max")
+plot(a, col = paste0(col_sample, 80))
+grid()
+```
+
+This m/z range seems to contain signal from several ions, eluting at different
+retention times. We next focus on a retention time range to inspect the signal
+from a single ion.
+
+```{r}
+plot(a, col = paste0(col_sample, 80), xlim = c(230, 300))
+grid()
+```
+
+We can see a shift in retention time between samples. Generally, the observed
+peaks seem to be between 10-15 seconds wide. We thus specify for the peak
+detection step below a `peakwidth = c(8, 20)`. This setting yielded acceptable
+results (tested in [raw-data-evaluation.qmd](raw-data-evaluation.qmd)).
+
+We next perform the chromatographic peak detection using the *centWave*
+algorithm. With `integrate = 2` we use an alternative algorithm to correctly
+identify the boundaries of the identified chromatographic peaks. Parameter
+`chunkSize` is used to control the number of files from which the data should be
+loaded into memory at a time.
+
+```{r}
+qtof <- findChromPeaks(qtof, CentWaveParam(peakwidth = c(8, 20), integrate = 2),
+                       chunkSize = 2)
+```
+
+With this setting we identified `r nrow(chromPeaks(qtof))` peaks in the full
+data set. The distribution of the peak widths in retention time and in m/z
+dimensions are:
+
+```{r}
+pks <- chromPeaks(qtof)
+quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
+quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
+
+```
+
+We next perform the chromatographic peak refinement to reduce the number of
+potential *centWave*-specific peak detection artifacts. We choose settings that
+depend on the observed peak widths above (i.e. half of the observed average
+widths).
+
+```{r}
+mnpp <- MergeNeighboringPeaksParam(expandRt = 6, expandMz = 0.01)
+qtof <- refineChromPeaks(qtof, mnpp)
+```
+
+We evaluate the observed peak widths also after refinement.
+
+```{r}
+pks <- chromPeaks(qtof)
+quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
+quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
+
+```
+
+TODO @Ahlam: maybe some additional information/summary on chromatographic peaks
+might be nice? Maybe we discuss in the next meeting.
+
+We next perform an initial correspondence analysis that is needed for the
+subsequent retention time alignment. We evaluate the settings on the example m/z
+range from above.
+
+```{r}
+#' Extract the ion chromatogram again.
+a <- chromatogram(qtof, aggregationFun = "max", mz = mzr)
+
+#' Configure settings
+pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
+                        bw = 6, minFraction = 0.5)
+
+#' Evaluate settings on the full range
+plotChromPeakDensity(a, param = pdp, col = col_sample)
+```
+
+We focus on a smaller retention time region.
+
+```{r}
+a_sub <- filterRt(a, rt = c(200, 300))
+plotChromPeakDensity(a_sub, param = pdp, col = col_sample)
+
+plot(a_sub[, 10])
+```
+
+With `bw = 6` we are able to separate the two sets of chromatographic peaks into
+two separate features. We use this parameter now for the correspondence on the
+big data set.
+
+```{r}
+qtof <- groupChromPeaks(qtof, param = pdp)
+```
+
+We next perform the retention time alignment.
+
+```{r}
+pgp <- PeakGroupsParam(
+    minFraction = 0.9,
+    extraPeaks = 100,
+    smooth = "loess",
+    span = 0.4,
+    family = "gaussian"
+)
+qtof <- adjustRtime(qtof, param = pgp)
+
+```
+
+Below we plot the results from the retention time alignment, i.e., the
+difference between the original and adjusted retention times (y-axis) along the
+retention time axis (x-axis).
+
+```{r}
+plotAdjustedRtime(qtof, col = paste0(col_sample, 80))
+```
+
+The changes made by the retention time alignment are quite large. We evaluate
+the impact also on the BPC and on the extracted ion chromatogram for our example
+m/z range. We set `chromPeaks = "none"` to not in addition extract the peak
+detection results, as we are only interested in the base peak signal.
+
+```{r}
+bpc_adj <- chromatogram(qtof, aggregationFun = "max", chromPeaks = "none")
+a_adj <- chromatogram(qtof, aggregationFun = "max", mz = mzr)
+```
+
+We first plot the BPC of the original data and then of the data after retention
+time alignment.
+
+```{r}
+par(mfrow = c(2, 1))
+plot(bpc, col = paste0(col_sample, 80))
+grid()
+plot(bpc_adj, col = paste0(col_sample, 80))
+grid()
+```
+
+Indeed, the data looks better aligned. We in addition evaluate the signal for
+the example m/z range.
+
+```{r}
+par(mfrow = c(2, 1))
+plot(a, col = paste0(col_sample, 80), peakType = "none")
+plot(a_adj, col = paste0(col_sample, 80), peakType = "none")
+```
+
+Also here, the data seems to be better aligned. Finally, we zoom into a
+retention time window from 200 to 300 seconds.
+
+```{r}
+par(mfrow = c(2, 1))
+plot(a, col = paste0(col_sample, 80), peakType = "none",
+     xlim = c(200, 300))
+plot(a_adj, col = paste0(col_sample, 80),
+     xlim = c(200, 300), peakType = "none")
+```
+
+We can thus conclude that the settings for the retention time alignment worked
+on the present data set. We continue the preprocessing with the final
+correspondence analysis. We adapt now the settings, in particular the `bw`
+parameter, that can be much stricter because of the properly aligned data
+set. Again, we test the settings on the extracted ion signal.
+
+```{r}
+#' Configure settings
+pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
+                        bw = 2, minFraction = 0.5)
+
+#' Evaluate settings on the full range
+plotChromPeakDensity(a_adj, param = pdp, col = col_sample)
+
+```
+
+These results look promising. We also zoom into one region with multiple peaks.
+
+```{r}
+a_adj_2 <- filterRt(a_adj, c(230, 350))
+plotChromPeakDensity(a_adj_2, param = pdp, col = col_sample)
+```
+
+We have perfect separation of the signal from the 3 ions that have all be
+grouped into 3 distinct features. We thus perform the final correspondence
+analysis
+
+```{r}
+qtof <- groupChromPeaks(qtof, param = pdp)
+```
+
+As a final step we next perform gap-filling to reduce the number of missing
+values in the data set.
+
+```{r}
+#' The number of missing values before gap filling
+sum(is.na(featureValues(qtof)))
+head(featureValues(qtof))
+```
+
+```{r}
+#' Perform gap-filling
+qtof <- fillChromPeaks(qtof, param = ChromPeakAreaParam())
+```
+
+```{r}
+#' The number of missing values after gap filling
+sum(is.na(featureValues(qtof)))
+head(featureValues(qtof))
+```
+
+```{r}
+#' Save the result object
+save(qtof, file = "data/qtof.RData")
+```
+
+
+TODO: we need to define what to do next...
 
 # Session Information
 
