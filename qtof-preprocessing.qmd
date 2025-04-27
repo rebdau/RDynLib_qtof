@@ -66,6 +66,8 @@ msLevel(spectra(qtof)) |>
 
 We next aim to get a closer look into the data, ideally extracting signal for individual ions (of a certain compound present in the sample) that will help us defining the settings for the chromatographic peak detection. In particular, we would like to know the width in retention time dimension, that will depend on the liquid chromatography (LC) settings used for the present data set. Without prior knowledge of the data, we need to try to find some signal to look at. We first extract the BPC of our data.
 
+First we assign to each unique sample a unique color :
+
 ```{r}
 library(RColorBrewer)
 # colors
@@ -76,12 +78,16 @@ names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc
 col_sample <- col_sample_id[sample_data$sample_id]
 ```
 
+then we plot the base peak chromatogram of this data :
+
 ```{r}
 
 bpc <- chromatogram(qtof, aggregationFun = "max")
 
 plot(bpc, col = col_sample)
 ```
+
+The base peak chromatography of this data shows that almost of signals have been detected before 900 seconds, and after 1300 seconds there are some noise...
 
 We next clean the data set filtering to a retention time range of 0-900 seconds. With the newly converted MS data, we no longer need to filter 0-intensity peaks and empty spectra. Below we list the number of MS1 and MS2 spectra for the filtered data set.
 
@@ -91,19 +97,6 @@ spectra(qtof) |>
     msLevel() |>
     table()
 
-```
-
-We next define the colors for the various sample gorups.
-
-```{r}
-library(RColorBrewer)
-# colors
-col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]
-names(col_sample_id) <- unique(sample_data$sample_id)
-# Assigne colors for each single name in the sample_id
-names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc",
-                          "S9Ra", "S9Rb", "S9Rc")
-col_sample <- col_sample_id[sample_data$sample_id]
 ```
 
 We next extract a total ion chromatogram (TIC) and base peak chromatogram (BPC) and calculate the similarities between these to evaluate similarity in the performance of the liquid chromatography.
@@ -199,6 +192,8 @@ quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
 
 ```
 
+The distribution of chromatographic peak widths in the retention time dimension ranged from approximately 1.64 to 77.27 seconds, with a median of about 12.02 seconds. In the m/z dimension, peak widths were much narrower, ranging from 0 to 0.1055 m/z units, with a median of around 0.0213.
+
 We next perform the chromatographic peak refinement to reduce the number of potential *centWave*-specific peak detection artifacts. We choose settings that depend on the observed peak widths above (i.e. half of the observed average widths).
 
 ```{r}
@@ -212,12 +207,11 @@ We evaluate the observed peak widths also after refinement.
 pks <- chromPeaks(qtof)
 quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
 quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
-
 ```
 
-TODO @Ahlam: maybe some additional information/summary on chromatographic peaks might be nice? Maybe we discuss in the next meeting.
+we observe that peak widths had not changed after refinement
 
--   tic after retention time refinement
+TIC after retention time refinement
 
 ```{r}
 tic_after_rf <- chromatogram(qtof, aggregationFun = "max")
@@ -262,6 +256,8 @@ pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
 plotChromPeakDensity(a, param = pdp, col = col_sample)
 ```
 
+The chromatographic signals below the brown line show consistent peak patterns across samples, with detected peaks (small circles) well aligned within dense regions, indicating good peak grouping and reproducibility across retention times.
+
 We focus on a smaller retention time region.
 
 ```{r}
@@ -297,6 +293,8 @@ Below we plot the results from the retention time alignment, i.e., the differenc
 plotAdjustedRtime(qtof, col = paste0(col_sample, 80))
 ```
 
+we can see that the difference between the adjusted and the raw retention time vary between -10 and 10 seconds, that is a large difference, but let's see how it affects the bcp after retention time alignment.
+
 Heatmap after retention time alignment
 
 ```{r}
@@ -316,7 +314,9 @@ pheatmap(bpcmap, annotation_col = ann,
 
 ```
 
-The changes made by the retention time alignment are quite large. We evaluate the impact also on the BPC and on the extracted ion chromatogram for our example m/z range. We set `chromPeaks = "none"` to not in addition extract the peak detection results, as we are only interested in the base peak signal.
+the heatmap above shows a better grouping between samples after retention time alignment, the similarity between samples from the same condition is very high, but between the "S1" and "S2" the similarity is low, although S1Rc and S9Rb are more similar compared to the other samples.
+
+-   The changes made by the retention time alignment are quite large. We evaluate the impact also on the BPC and on the extracted ion chromatogram for our example m/z range. We set `chromPeaks = "none"` to not in addition extract the peak detection results, as we are only interested in the base peak signal.
 
 ```{r}
 bpc_adj <- chromatogram(qtof, aggregationFun = "max", chromPeaks = "none")
@@ -363,6 +363,8 @@ plotChromPeakDensity(a_adj, param = pdp, col = col_sample)
 
 ```
 
+Below the brown line, each trace represents the chromatographic signal of an individual sample, and the small circles indicate the detected peak positions; aligned circles across samples suggest consistent peak detection at the same retention time.
+
 These results look promising. We also zoom into one region with multiple peaks.
 
 ```{r}
@@ -384,6 +386,8 @@ sum(is.na(featureValues(qtof)))
 head(featureValues(qtof))
 ```
 
+the resulting table shows a lot of "NA" missing values, so let's apply the gap-filling in order to fill in missing peaks.
+
 ```{r}
 #' Perform gap-filling
 qtof <- fillChromPeaks(qtof, param = ChromPeakAreaParam())
@@ -394,6 +398,8 @@ qtof <- fillChromPeaks(qtof, param = ChromPeakAreaParam())
 sum(is.na(featureValues(qtof)))
 head(featureValues(qtof))
 ```
+
+the table above shows that there is no more missing peaks.
 
 ```{r}
 #' Save the result object
