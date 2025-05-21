@@ -111,7 +111,7 @@ there). With the newly converted MS data, we no longer need to filter
 spectra for the filtered data set.
 
 ```{r}
-qtof <- filterSpectra(qtof, filterRt, c(10, 900))
+qtof <- filterSpectra(qtof, filterRt, c(10, 1000))
 spectra(qtof) |>
     msLevel() |>
     table()
