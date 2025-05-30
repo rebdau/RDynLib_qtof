@@ -104,6 +104,57 @@ grid()
 The base peak chromatography of this data shows that most of the signal is
 detected before 900 seconds, and after 1300 seconds noise seems to increase.
 
+## Evaluation of signal for known compounds
+
+To ensure we would not loose any signal from metabolites known to be present in
+the data set we next extract ion chromatograms for m/z ranges of known
+compounds.
+
+```{r}
+kc <- read_xlsx("data/inclusionlist50_fullfragmentation.xlsx") |>
+    as.data.frame()
+kc <- kc[!is.na(kc$mz), ]
+```
+
+The compounds and their respective m/z we will evaluate are listed below.
+
+```{r, results = "asis"}
+pandoc.table(kc[, c("identification", "mz", "rt")],
+             style = "rmarkdown", caption = "Known compounds.")
+```
+
+```{r}
+#' Extract the full RT range EIC for each
+mzr <- cbind(mzmin = kc$mz - 0.01, mzmax = kc$mz + 0.01)
+kc_eic <- chromatogram(qtof, mz = mzr)
+```
+
+```{r}
+#' Plot and save the full EIC for each known compound.
+for (i in seq_len(nrow(kc_eic))) {
+
+}
+```
+
+Next we perform chromatographic peak detection in the extracted ion
+chromatograms to determine the upper retention time limit for the retention time
+filtering of the data set (using `filterRt()`).
+
+```{r}
+#' Identify chromatographic peaks in the data; use the same CentWaveParam
+#' we use below for the full data set
+
+#' We need to evaluate the chromPeaks()[, "rt"] column.
+#' An easy solution to define the maximum rt to use in `filterRt()` below would
+#' be to simply take the maximum rt of the identified chromatographic peaks.
+#' Maybe combine that also with "maxo" column? i.e. consider only
+#' chromatographic peaks with a maxo > 5000 (or another value)?
+```
+
+
+
+## Evaluation of chromatographic signal
+
 We next clean the data set filtering to a retention time range of 10-900 seconds
 (we remove the first couple of seconds because we don't expect LC-separation
 there). With the newly converted MS data, we no longer need to filter
@@ -691,15 +742,6 @@ spectra(qtof)$original_precursor_mz <- precursorMz(spectra(qtof))
 spectra(qtof)$precursorMz <- epmz
 ```
 
-
-## Questions for discussion with Rebecca
-
-- [ ] What's next? Should we annotate the MS1 features using the MS2 DDA data?
-- [ ] Discuss the observed difference between the observed and expected
-      precursor m/z. What should we trust?
-- [ ] No QC/sample pool data? Should we remove features with high RSD (CV) in
-      the 3 technical replicates?
-- [ ] Discuss the gap filling issue.
 
 
 # Session Information
