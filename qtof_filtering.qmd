@@ -1,0 +1,79 @@
+---
+title: "Untitled"
+format: html
+server: shiny
+---
+
+## Shiny Documents
+
+This Quarto document is made interactive using Shiny. Interactive documents allow readers to modify parameters and see the results immediately. Learn more about Shiny interactive documents at <https://quarto.org/docs/interactive/shiny/>.
+
+## Inputs and Outputs
+
+You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change. This demonstrates how a standard R plot can be made interactive:
+
+```{r}
+library(Spectra)
+library(xcms)
+library(MsExperiment)
+```
+
+```{r}
+
+precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
+   # if (is.unsorted(rtime(x)))
+    #    stop("Spectra with data origin ", dataOrigin(x[1L]),
+     #        " are not increasingly sorted by retention time.")
+    ms2_idx <- which(msLevel(x) == 2L)
+    ms1_idx <- which(msLevel(x) == 1L)
+    ratios <- rep(NA_real_, length(x))  
+    pmzs <- precursorMz(x)
+    for (i in ms2_idx) {
+        ratio <- NA_real_
+        j <- ms1_idx[ms1_idx < i]
+        
+        if (length(j)) {
+            j <- j[length(j)]
+            s1 <- filterMzRange(
+                x[j], c(pmzs[i] + c(-1, 1) * (tolerance + pmzs[i] * ppm / 1e6)))
+            
+            pks <- peaksData(s1, c("mz", "intensity"))[[1L]]
+            
+            if (nrow(pks)) {
+                intensities <- pks[, 2L]
+                ratio <- max(intensities) / sum(intensities)
+            }
+        }
+        
+        ratios[i] <- ratio
+    }
+    
+    ratios
+}
+
+
+```
+
+
+```{r}
+
+load("C:/Users/amentag/Desktop/these/These/clones/new_clones/RDynLib_qtof/data/qtof_final.RData")
+qtof_neg <- spectra(qtof) 
+```
+
+```{r}
+class(qtof_neg)
+```
+```{r}
+precPurity <- precursorPurity(qtof_neg)
+
+qtof_neg$precursorPurity <- precPurity
+
+spectraData(qtof_neg)
+```
+
+
+
+
+
+
