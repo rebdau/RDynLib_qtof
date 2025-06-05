@@ -92,7 +92,7 @@ The base peak chromatography of this data shows that almost of signals have been
 We next clean the data set filtering to a retention time range of 0-900 seconds. With the newly converted MS data, we no longer need to filter 0-intensity peaks and empty spectra. Below we list the number of MS1 and MS2 spectra for the filtered data set.
 
 ```{r}
-qtof <- filterSpectra(qtof, filterRt, c(0, 900))
+qtof <- filterSpectra(qtof, filterRt, c(0, 1000))
 spectra(qtof) |>
     msLevel() |>
     table()
@@ -407,8 +407,10 @@ save(qtof, file = "data/qtof.RData")
 ```
 
 ```{r}
-load("data/qtof.RData")
-head(featureValues(qtof))
+load("C:/Users/amentag/Desktop/these/These/clones/new_clones/RDynLib_qtof/data/qtof_final.RData")
+sp <- spectra(qtof) 
+spectraData(sp)
+
 ```
 
 the extracted ion chromatogram for some knowns compounds :
