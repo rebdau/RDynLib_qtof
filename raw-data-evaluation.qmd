@@ -8,12 +8,7 @@ date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
 
 # Introduction
 
-The QTOF data of the present project was converted from Waters raw files, but
-this data has an unexpectedly large number of spectra as well as spectra with
-negative intensities. In addition, spikes are visible in the base peak
-chromatogram (BPC) along the full retention time range suggesting the presence
-of lock mass peaks. In this document we closely inspect the raw data of the
-experiment to understand and eventually clean and correct the data.
+The QTOF data of the present project were converted from Waters raw files into mzXML files, using MSConvert from ProteoWizard, without using any filter. These chromatograms have an unexpectedly large number of spectra as well as spectra with negative intensities. In addition, spikes are visible in the base peak chromatogram (BPC) along the full retention time range suggesting the presence of lock mass peaks. In this document we closely inspect the raw data of the experiment to understand and eventually clean and correct the data.
 
 # Data import
 
@@ -32,9 +27,20 @@ library(pheatmap)
 
 Next we read the LC-MS/MS data from the mzXML data files.
 
+To upload the files, we create an Excel file `qtof_data_files.xlsx` that must meet the following minimal requirements:\
+– A column named **`data_file`** containing the filenames of the `.mzXML` files.\
+– A column named **`sample_name`** with the corresponding sample names.\
+The sample name for blank control files should be `"blank"`.
+
+The direcotry hierarchy is as follows: – `my.workdir/`\
+– `my.workdir/sample_data/` containing the Excel file\
+– `my.workdir/mzml/` containing the `.mzXML` files
+
+In the following code, `my.workdir/` is the working directory:
+
 ```{r}
 #' Define the directory containing the data
-pth <- "C:/Users/amentag/Desktop/these/Ahlam/these/RebeccaFastDDAJuin2023.PRO/Data"
+pth <- getwd()
 
 #' Read the table with the data files
 sample_data <- read_xlsx(file.path(pth, "/sample_data/qtof_data_files.xlsx")) |>
@@ -44,7 +50,7 @@ sample_data <- read_xlsx(file.path(pth, "/sample_data/qtof_data_files.xlsx")) |>
 sample_data <- sample_data[sample_data$sample_name != "blank", ]
 
 #' Define the file path where the mzXML files are located
-fp <- "C:/Users/amentag/Desktop/these/Ahlam/these/RebeccaFastDDAJuin2023.PRO/Data/mzml/"
+fp <- file.path(pth, "mzml/")
 
 #' Import the MS data
 qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
