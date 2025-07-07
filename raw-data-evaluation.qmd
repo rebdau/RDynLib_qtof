@@ -669,3 +669,7 @@ Looks better, but still not perfect.
 The *Spectra* package provides the `estimatePrecursorMz()` function that *estimates* the precursor m/z based on the m/z value of the (most likely) mass peak from the previous MS1 scan.
 
 Alternatively, we could use this [tool](https://github.com/elnurgar/mzxml-precursor-corrector) for correcting the precursor m/z.
+
+# Filtering Lockmass Scans from Waters
+
+The Lockmass scans from Waters raw files can be filtered out by converting the files to `.mzXML` format using **MSConvert** with the `Waters DDA Processing` filter enabled.
