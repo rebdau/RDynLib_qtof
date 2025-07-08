@@ -8,7 +8,7 @@ date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
 
 # Introduction
 
-The QTOF data of the present project were converted from Waters raw files into mzXML files, using MSConvert from ProteoWizard, without using any filter. These chromatograms have an unexpectedly large number of spectra as well as spectra with negative intensities. In addition, spikes are visible in the base peak chromatogram (BPC) along the full retention time range suggesting the presence of lock mass peaks. In this document we closely inspect the raw data of the experiment to understand and eventually clean and correct the data.
+The QTOF data of the present project were converted from Waters raw files into mzML files, using MSConvert from ProteoWizard, without using any filter. These chromatograms have an unexpectedly large number of spectra as well as spectra with negative intensities. In addition, spikes are visible in the base peak chromatogram (BPC) along the full retention time range suggesting the presence of lock mass peaks. In this document we closely inspect the raw data of the experiment to understand and eventually clean and correct the data.
 
 # Data import
 
@@ -25,16 +25,17 @@ library(dplyr)
 library(pheatmap)
 ```
 
-Next we read the LC-MS/MS data from the mzXML data files.
+Next we read the LC-MS/MS data from the mzML data files.
 
 To upload the files, we create an Excel file `qtof_data_files.xlsx` that must meet the following minimal requirements:\
-– A column named **`data_file`** containing the filenames of the `.mzXML` files.\
+– A column named **`data_file`** containing the filenames of the `.mzML` files.\
 – A column named **`sample_name`** with the corresponding sample names.\
-The sample name for blank control files should be `"blank"`.
+The sample name for blank control files should be `"blank"`.\
+– A column named **`sample_id`**.
 
-The direcotry hierarchy is as follows: – `my.workdir/`\
-– `my.workdir/sample_data/` containing the Excel file\
-– `my.workdir/mzml/` containing the `.mzXML` files
+The direcotry hierarchy is as follows: – `my.workdir/data/`\
+– `my.workdir/data/sample_data/` containing the Excel file\
+– `my.workdir/data/mzml/` containing the `.mzML` files
 
 In the following code, `my.workdir/` is the working directory:
 
@@ -43,19 +44,30 @@ In the following code, `my.workdir/` is the working directory:
 pth <- getwd()
 
 #' Read the table with the data files
-sample_data <- read_xlsx(file.path(pth, "/sample_data/qtof_data_files.xlsx")) |>
+sample_data <- read_xlsx(file.path(pth, "data/sample_data/qtof_data_files.xlsx")) |>
     as.data.frame()
 
 #' We drop the blank data file
 sample_data <- sample_data[sample_data$sample_name != "blank", ]
 
-#' Define the file path where the mzXML files are located
-fp <- file.path(pth, "mzml/")
+#' Define the file path where the mzML files are located
+fp <- file.path(pth, "data", "mzml")
 
 #' Import the MS data
-qtof <- readMsExperiment(paste0(fp, sample_data$data_file),
+qtof <- readMsExperiment(file.path(fp, sample_data$data_file),
                          sampleData = sample_data)
 qtof
+```
+
+The following code my help to create the table with data files and sample names:
+
+```{r}
+data_file <- list.files(path="./data/mzml",pattern="mzML")
+sample_name <-sub(data_file,  pattern=".mzML", replacement = "")
+sample_id <- substr(sample_name,1,4)
+sample_data <- data.frame(sample_id,data_file,sample_name)
+
+write.csv(sample_data, "./data/sample_data/qtof_data_files.csv", row.names=FALSE)
 ```
 
 ```{r}
@@ -99,10 +111,10 @@ spectra(qtof) |>
 ```{r}
 library(RColorBrewer)
 # colors
-col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6,7)]
+col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6)]
 names(col_sample_id) <- unique(sample_data$sample_id)
 # Assigne colors for each single name in the sample_id
-names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc")
+names(col_sample_id) <- c("S1Ra", "S1Rb", "S1Rc", "S9Ra", "S9Rb", "S9Rc")
 col_sample <- col_sample_id[sample_data$sample_id]
 ```
 
@@ -669,3 +681,7 @@ Looks better, but still not perfect.
 The *Spectra* package provides the `estimatePrecursorMz()` function that *estimates* the precursor m/z based on the m/z value of the (most likely) mass peak from the previous MS1 scan.
 
 Alternatively, we could use this [tool](https://github.com/elnurgar/mzxml-precursor-corrector) for correcting the precursor m/z.
+
+# Filtering Lockmass Scans from Waters
+
+The Lockmass scans from Waters raw files can be filtered out by converting the files to `.mzML` format using **MSConvert** with the `Waters DDA Processing` filter enabled.
