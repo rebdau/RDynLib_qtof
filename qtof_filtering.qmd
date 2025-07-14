@@ -1,0 +1,150 @@
+---
+title: "Untitled"
+format: html
+server: shiny
+---
+
+In this quarto document we filtered the QTOF neg of flax seed data.
+We create the precursorPurity and PrecursorIntensity columns.
+we remove MS1 data, then we select the 10 %  spectra with highest precursor 
+purity, and from those spectra we select the 10 %  spectra with highest 
+precursor intensity and finally we select the spectrum with highest number 
+of fragments
+
+```{r}
+library(Spectra)
+library(xcms)
+library(MsExperiment)
+```
+
+```{r}
+
+precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
+   # if (is.unsorted(rtime(x)))
+    #    stop("Spectra with data origin ", dataOrigin(x[1L]),
+     #        " are not increasingly sorted by retention time.")
+    ms2_idx <- which(msLevel(x) == 2L)
+    ms1_idx <- which(msLevel(x) == 1L)
+    ratios <- rep(NA_real_, length(x))  
+    pmzs <- precursorMz(x)
+    for (i in ms2_idx) {
+        ratio <- NA_real_
+        j <- ms1_idx[ms1_idx < i]
+        
+        if (length(j)) {
+            j <- j[length(j)]
+            s1 <- filterMzRange(
+                x[j], c(pmzs[i] + c(-1, 1) * (tolerance + pmzs[i] * ppm / 1e6)))
+            
+            pks <- peaksData(s1, c("mz", "intensity"))[[1L]]
+            
+            if (nrow(pks)) {
+                intensities <- pks[, 2L]
+                ratio <- max(intensities) / sum(intensities)
+            }
+        }
+        
+        ratios[i] <- ratio
+    }
+    
+    ratios
+}
+
+
+```
+
+
+```{r}
+
+load("C:/Users/amentag/Desktop/these/These/clones/new_clones/RDynLib_qtof/data/qtof_final.RData")
+qtof_neg <- spectra(qtof) 
+```
+
+```{r}
+class(qtof_neg)
+```
+```{r}
+precPurity <- precursorPurity(qtof_neg)
+spectraData(qtof_neg)$precursorIntensity <- NULL
+precursorIntensity <- estimatePrecursorIntensity(qtof_neg, tolerance = 0.3, ppm = 10)
+qtof_neg$precursorPurity <- precPurity
+qtof_neg$precursorIntensity <- precursorIntensity
+spectraData(qtof_neg)
+```
+
+
+```{r}
+spectra(qtof) <- qtof_neg
+qtof <- featureSpectra(qtof, msLevel = 2)
+spectraData(qtof)
+```
+
+select the 10 %  spectra with highest precursor purity
+```{r}
+library(dplyr)
+library(Spectra)
+
+# Extract the spectra data and fragment counts
+purity_df <- as.data.frame(spectraData(qtof)) %>%
+  mutate(
+    fragment_count = lengths(qtof),
+    index = row_number()
+  )
+
+purity_top <- purity_df %>%
+  group_by(feature_id) %>%
+  arrange(desc(precursorPurity)) %>%
+  mutate(n_rows = n(),
+         top_n = ceiling(n_rows * 0.10),
+         row_number = row_number()) %>%
+  filter(row_number <= top_n) %>%
+  select(-n_rows, -top_n, -row_number)  
+
+```
+
+Of these spectra select the 10 %  spectra with highest precursor intensity
+```{r}
+library(Spectra)
+library(dplyr)
+
+intensity_top <- purity_top %>%
+  group_by(feature_id) %>%
+  arrange(desc(precursorIntensity)) %>%
+  mutate(n_rows = n(),
+         top_n = ceiling(n_rows * 0.10),
+         row_number = row_number()) %>%
+  filter(row_number <= top_n) %>%
+  select(-n_rows, -top_n, -row_number)
+
+```
+
+Of these spectra select the spectrum with highest number of fragments
+
+```{r}
+final_selected <- intensity_top %>%
+  group_by(feature_id) %>%
+  filter(fragment_count == max(fragment_count, na.rm = TRUE)) %>%
+  slice_head(n = 1) # in case of tie
+
+# Extract those spectra from original object
+qtof_filtered <- qtof[final_selected$index]
+
+# Check number of unique features retained
+length(unique(spectraData(qtof_filtered)$feature_id))
+spectraData(qtof_filtered)
+
+```
+
+As a result we have 164 unique feature 
+
+Now we save the object
+```{r}
+save(qtof_filtered, file = "C:/Users/amentag/Desktop/these/These/clones/new_clones/RDynLib_qtof/data/qtof_filtered.RData")
+```
+
+
+
+
+
+
+

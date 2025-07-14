@@ -8,9 +8,12 @@ date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
 
 # Introduction
 
-In this document we perform the preprocessing and analysis of the QTOF LC-MS/MS data.
+In this document we perform the preprocessing and analysis of the QTOF LC-MS/MS
+data.
 
-The QTOF data were converted from Waters raw files into `.mzML` files, using **MSConvert** from **ProteoWizard**, with the `Waters DDA Processing` filter enabled, in order to filter out the Lockmass scans.
+The QTOF data were converted from Waters raw files into `.mzML` files, using
+*MSConvert* from *ProteoWizard*, with the *Waters DDA Processing* filter
+enabled, in order to filter out the Lockmass scans.
 
 # Data import
 
@@ -31,17 +34,28 @@ library(pheatmap)
 
 Next we read the LC-MS/MS data from the mzML data files.
 
-To upload the files, we create an Excel file `qtof_data_files.xlsx` that must meet the following minimal requirements:\
-– A column named **`data_file`** containing the filenames of the `.mzML` files.\
-– A column named **`sample_name`** with the corresponding sample names.\
-The sample name for blank control files should be `"blank"`.\
-– A column named **`sample_id`**.
+The sample/file information is retrieved from an Excel file
+*qtof_data_files.xlsx* that must meet the following minimal requirements:
 
-The direcotry hierarchy is as follows: – `my.workdir/data/`\
-– `my.workdir/data/sample_data/` containing the Excel file\
-– `my.workdir/data/mzml/` containing the `.mzML` files
+– A column named *data_file* containing the filenames of the *.mzML* files.
+– A column named *sample_name* with the corresponding sample names. The sample
+  name for blank control files should be `"blank"`.
+– A column named *sample_id*.
 
-In the following code, `my.workdir/` is the working directory:
+All files should be placed locally within the working directory containing also
+this file (i.e., *qtof-preprocessing.qmd*). The directory hierarchy is expected
+to be the following:
+
+– *<my.workdir>/data/mzML*: directory containing all *.mzML* files.
+– *<my.workdir>/data/sample_data/*: directory containing the Excel file with the
+  sample and file information.
+
+In the following code, *<my.workdir>* is the working directory:
+
+```{r}
+pth <- getwd()
+pth
+```
 
 ```{r}
 #' Define the directory containing the data
@@ -55,7 +69,7 @@ sample_data <- read_xlsx(file.path(pth, "data/sample_data/qtof_data_files.xlsx")
 sample_data <- sample_data[sample_data$sample_name != "blank", ]
 
 #' Define the file path where the mzML files are located
-fp <- file.path(pth, "data", "mzml")
+fp <- file.path(pth, "data", "mzML")
 
 #' Import the MS data
 qtof <- readMsExperiment(file.path(fp, sample_data$data_file),
@@ -63,14 +77,16 @@ qtof <- readMsExperiment(file.path(fp, sample_data$data_file),
 qtof
 ```
 
-The following code my help to create the table with data files and sample names:
+The following code may help to create the table with data files and sample
+names:
 
-```{r}
-data_file <- list.files(path="./data/mzml",pattern="mzML")
-sample_name <-sub(data_file,  pattern=".mzML", replacement = "")
-sample_id <- substr(sample_name,1,4)
-sample_data <- data.frame(data_file,sample_name)
-write.csv(sample_data, "./data/sample_data/qtof_data_files.csv", row.names=FALSE)
+```{r, eval = FALSE}
+data_file <- list.files(path = "./data/mzML", pattern="mzML")
+sample_name <- sub(data_file, pattern = ".mzML", replacement = "")
+sample_id <- substr(sample_name, 1, 4)
+sample_data <- data.frame(data_file, sample_name)
+write.csv(sample_data, "data/sample_data/qtof_data_files.csv",
+          row.names = FALSE)
 ```
 
 The data files analyzed here are listed below.
@@ -80,7 +96,13 @@ pandoc.table(as.data.frame(sampleData(qtof)), caption = "Data files",
              split.table = Inf, style = "rmarkdown")
 ```
 
-For the present dataset, two different varieties of flaxseeds, S1 and S9, were analyzed. Three different *biological* replicates (a, b and c) were analyzed per variety. Each biological replicate consisted of the pooled integuments of three flaxseeds, and was analyzed with three different collision energies (3 *technical* replicates per *biological* replicate). The total number of analyses was thus: 3 *technical* replicates \* 3 *biological* replicates \* 2 *varieties* = 18 analyses).
+For the present dataset, two different varieties of flaxseeds, S1 and S9, were
+analyzed. Three different *biological* replicates (a, b and c) were analyzed per
+variety. Each biological replicate consisted of the pooled integuments of three
+flaxseeds, and was analyzed with three different collision energies (3
+*technical* replicates per *biological* replicate). The total number of analyses
+was thus: 3 *technical* replicates \* 3 *biological* replicates \* 2 *varieties*
+= 18 analyses).
 
 The number of MS1 and MS2 spectra in the present data set are listed below:
 
@@ -89,26 +111,30 @@ msLevel(spectra(qtof)) |>
     table()
 ```
 
-# Data evaluation
+# Data evaluation and Retention Time Range Setting
 
-## General data overview
+We next aim to get a closer look into the data, ideally extracting signal for
+individual ions (of a certain compound present in the sample) that will help us
+defining the settings for the chromatographic peak detection. In particular, we
+would like to know the width in retention time dimension, that will depend on
+the liquid chromatography (LC) settings used for the present data set. Without
+prior knowledge of the data, we need to try to find some signal to look at. We
+first extract the BPC of our data.
 
-We next aim to get a closer look into the data, ideally extracting signal for individual ions (of a certain compound present in the sample) that will help us defining the settings for the chromatographic peak detection. In particular, we would like to know the width in retention time dimension, that will depend on the liquid chromatography (LC) settings used for the present data set. Without prior knowledge of the data, we need to try to find some signal to look at. We first extract the BPC of our data.
-
-First we assign to each unique sample a unique color :
+First we assign to **each unique sample a unique color** :
 
 ```{r}
 library(RColorBrewer)
 # colors
 col_sample_id <- brewer.pal(9, "Set1")[c(1, 2, 3, 4, 5, 6, 7)]
-names(col_sample_id) <- unique(sample_data$sample_id)
+names(col_sample_id) <- unique(sampleData(qtof)$sample_id)
 # Assigne colors for each single name in the sample_id
 names(col_sample_id) <- c("blank", "S1Ra", "S1Rb", "S1Rc", "S9Ra",
                           "S9Rb", "S9Rc")
-col_sample <- col_sample_id[sample_data$sample_id]
+col_sample <- col_sample_id[sampleData(qtof)$sample_id]
 ```
 
-then we plot the base peak chromatogram of this data :
+Then we plot the **base peak chromatogram** for all samples :
 
 ```{r}
 bpc <- chromatogram(qtof, aggregationFun = "max")
@@ -119,9 +145,56 @@ legend("topright", legend = names(col_sample_id), lty = 1, col = col_sample_id)
 grid()
 ```
 
-The base peak chromatography of this data shows that most of the signal is detected before 900 seconds, and after 1300 seconds noise seems to increase.
+The base peak chromatogram shows that most of the signal is detected before 900
+seconds, and after 1300 seconds noise seems to increase.
 
-We next clean the data set filtering to a retention time range of 10-900 seconds (we remove the first couple of seconds because we don't expect LC-separation there). With the newly converted MS data, we no longer need to filter 0-intensity peaks and empty spectra. Below we list the number of MS1 and MS2 spectra for the filtered data set.
+## Evaluation of signal for known compounds
+
+To ensure we would not loose any signal from metabolites known to be present in
+the data set we next extract ion chromatograms for *m/z* ranges of known
+compounds.
+
+```{r}
+kc <- read_xlsx("data/inclusionlist50_fullfragmentation.xlsx") |>
+    as.data.frame()
+kc <- kc[!is.na(kc$mz), ]
+```
+
+The compounds and their respective *m/z* we will evaluate are listed below.
+
+```{r, results = "asis"}
+pandoc.table(kc[, c("identification", "mz", "rt")],
+             style = "rmarkdown", caption = "Known compounds.")
+```
+
+```{r}
+#' Extract the full RT range EIC for each
+mzr <- cbind(mzmin = kc$mz - 0.01, mzmax = kc$mz + 0.01)
+kc_eic <- chromatogram(qtof, mz = mzr)
+```
+
+```{r}
+image_path <- file.path("images", "known_compounds")
+dir.create(image_path, showWarnings = FALSE, recursive = TRUE)
+
+#' Plot and save the full EIC for each known compound.
+for (i in seq_len(nrow(kc_eic))) {
+    f <- paste0(image_path, "/", kc$Anion[i], ".png")
+    png(f, width = 14, height = 7, units = "cm", res = 600, pointsize = 4)
+    plot(kc_eic[i, ], col = paste0(col_sample, 80))
+    grid()
+    dev.off()
+}
+```
+
+
+## Evaluation of chromatographic signal
+
+We next clean the data set filtering to a retention time range of 10-1000
+seconds (we remove the first couple of seconds because we don't expect
+LC-separation there). With the newly converted MS data, we no longer need to
+filter 0-intensity peaks and empty spectra. Below we list the number of MS1 and
+MS2 spectra for the filtered data set.
 
 ```{r}
 qtof <- filterSpectra(qtof, filterRt, c(10, 1000))
@@ -131,7 +204,14 @@ spectra(qtof) |>
 
 ```
 
-We next extract a total ion chromatogram (TIC) and base peak chromatogram (BPC) and calculate the similarities between these to evaluate similarity in the performance of the liquid chromatography. To this end we first bin the signal along retention time axis into 45 second wide bins (to get \~ 20 bins along the retention time). After log2 transforming the binned intensities, we center them for each bin across samples. This data set represents thus, for each bin, the relative intensity measured in one sample compared to the average for that bin across all samples.
+We next extract a total ion chromatogram (TIC) and base peak chromatogram (BPC)
+and calculate the similarities between these to evaluate similarity in the
+performance of the liquid chromatography. To this end we first **bin the signal
+along the retention time axis** into 45 second wide bins (to get \~ 20 bins
+along the retention time). After log2 transforming the binned intensities, we
+center them for each bin across samples. This data set represents thus, **for
+each bin, the relative intensity measured in one sample compared to the average
+for that bin across all samples**.
 
 ```{r}
 #' Extract TIC
@@ -151,7 +231,10 @@ rownames(ticmap) <- sampleData(qtof)$sample_name
 ticmap <- scale(ticmap, center = TRUE, scale = FALSE)
 ```
 
-We next a hierarchical clustering approach to group the samples (rows) based on the signal along the retention time axis and create a heatmap of the relative signal per bin. This allows us to eventually spot the area along the retention time in which the individual LC runs are similar/different.
+We next use a **hierarchical clustering** approach to group the samples (rows)
+based on the signal along the retention time axis and create a heatmap of the
+relative signal per bin. This allows us to eventually **spot the area along the
+retention time in which the individual LC runs are similar/different**.
 
 ```{r}
 ann <- data.frame(sample_id = sampleData(qtof)[, "sample_id"])
@@ -162,10 +245,14 @@ pheatmap(ticmap, cluster_cols = FALSE,
          annotation_row = ann)
 ```
 
-LC-runs separate by seed types. There is also some grouping of the replicated measurement runs for each sample. The biggest difference in the TIC seems to be around 302 seconds. We repeat the analysis using the base peak chromatogram (BPC).
+LC-runs separate by seed types. There is also some grouping of the replicated
+measurement runs for each sample. The biggest difference in the TIC seems to be
+around 302 seconds.
+
+We repeat the analysis using the base peak chromatogram (BPC).
 
 ```{r}
-#' Extract TIC
+#' Extract BPC
 bpc <- chromatogram(qtof, aggregationFun = "max")
 #' Bin the signal
 bpcb <- bin(bpc, binSize = 45)
@@ -185,7 +272,8 @@ pheatmap(bpcmap, cluster_cols = FALSE,
          annotation_row = ann)
 ```
 
-The grouping is clearer with the base peak signal: LC-MS runs cluster by seed type (S1 or S9).
+The grouping is clearer with the base peak signal: LC-MS runs cluster by seed
+type (S1 or S9).
 
 As a reference we plot the full BPC below.
 
@@ -194,13 +282,20 @@ plot(bpc, col = paste0(col_sample, 40), main = "BPC")
 grid()
 ```
 
-Note however that the TIC and BPC was created on the raw data and there seem to be relatively big retention time shifts between the samples. We will thus repeat the same analysis after the retention time alignment step.
+Note however that the TIC and BPC were created on the raw data and there seems
+to be relatively big retention time shifts between the samples. We will thus
+repeat the same analysis after the retention time alignment step.
 
 # Data preprocessing
 
-To derive the settings for the chromatographic peak detection for the present data set we below extract the ion signal for a m/z range which might contain signal from some ions. Definition of this m/z range is described in [raw-data-evaluation.qmd](raw-data-evaluation.qmd).
+To derive the settings for the chromatographic peak detection for the present
+data set we below extract the ion signal for a m/z range which might contain
+signal from some ions. Definition of this m/z range is described in
+[raw-data-evaluation.qmd](raw-data-evaluation.qmd).
 
-Below we extract the ion chromatogram for one example m/z range.
+Below we extract the ion chromatogram for one example m/z range. The following
+m/z range encompasses m/z 449.1078, corresponding to dihydrokaempferol glucoside
+\[M-H\]-, a compound detected in a previous experiment in flaxseed integuments.
 
 ```{r}
 mzr <- c(449.08, 449.12)
@@ -210,23 +305,76 @@ plot(a, col = paste0(col_sample, 80))
 grid()
 ```
 
-This m/z range seems to contain signal from several ions, eluting at different retention times. We next focus on a retention time range to inspect the signal from a single ion.
+This m/z range seems to contain signal from several ions, eluting at different
+retention times. We next focus on a retention time range to inspect the signal
+from a single ion.
 
 ```{r}
 plot(a, col = paste0(col_sample, 80), xlim = c(230, 300))
 grid()
 ```
 
-We can see a shift in retention time between samples. Generally, the observed peaks seem to be between 10-15 seconds wide. We thus specify for the peak detection step below a `peakwidth = c(8, 20)`. This setting yielded acceptable results (tested in [raw-data-evaluation.qmd](raw-data-evaluation.qmd)).
+We can see a shift in retention time between samples. Generally, the observed
+peaks seem to be between 10-15 seconds wide.
 
-We next perform the chromatographic peak detection using the *centWave* algorithm. With `integrate = 2` we use an alternative algorithm to correctly identify the boundaries of the identified chromatographic peaks. Parameter `chunkSize` is used to control the number of files from which the data should be loaded into memory at a time.
+Below we extract the ion chromatogram for two m/z ranges corresponding to
+previously characterized compounds that eluted last of all characterized
+compounds in earlier LC-MS analyses of flaxseed integuments: m/z 1248.8553 -
+high MW Herbacetin diglucoside derivative m/z 869.2592 - triacetyl Herbaectin
+diglucoside conjugate We will check if these compounds fall in the selected
+retention time range (10-1000 s), and if the peak width is similar to the peak
+width observed for m/z 449.
+
+```{r}
+mzr <- c(869.24, 869.28)
+
+b <- chromatogram(qtof, mz = mzr, aggregationFun = "max")
+plot(b, col = paste0(col_sample, 80))
+grid()
+```
+
+To better see the peak width, we focus on a retention time range 900-1000.
+
+```{r}
+plot(b, col = paste0(col_sample, 80), xlim = c(900, 1000))
+grid()
+```
+
+```{r}
+mzr <- c(1248.83, 1248.87)
+
+b <- chromatogram(qtof, mz = mzr, aggregationFun = "max")
+plot(b, col = paste0(col_sample, 80))
+grid()
+```
+
+To better see the peak width, we focus on retention time range 900-1000.
+
+```{r}
+plot(b, col = paste0(col_sample, 80), xlim = c(800, 900))
+grid()
+```
+
+All previously characterized LC-MS features fall within the selected retention
+time range and the peak widths of all inspected features is constant, around
+10-15 seconds. We thus specify for the peak detection step below as `peakwidth =
+c(8, 20)`. This setting yielded acceptable results (tested in
+[raw-data-evaluation.qmd](raw-data-evaluation.qmd))
+
+We next perform the **chromatographic peak detection** using the *centWave*
+algorithm. With `integrate = 2` we use an alternative algorithm to correctly
+identify the boundaries of the identified chromatographic peaks. Parameter
+`chunkSize` is used to control the number of files from which the data should be
+loaded into memory at a time.
 
 ```{r}
 qtof <- findChromPeaks(qtof, CentWaveParam(peakwidth = c(8, 20), integrate = 2),
                        chunkSize = 2)
 ```
 
-With this setting we identified `r nrow(chromPeaks(qtof))` peaks in the full data set. The distribution of the peak widths in retention time and in m/z dimensions are:
+With this setting we identified `r nrow(chromPeaks(qtof))` peaks in the full
+data set. The distribution of the peak widths in retention time and in m/z
+dimensions are:
 
 ```{r}
 pks <- chromPeaks(qtof)
@@ -235,9 +383,15 @@ quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
 
 ```
 
-The distribution of chromatographic peak widths in the retention time dimension ranged from approximately 1.64 to 77.27 seconds, with a median of about 12.02 seconds. In the m/z dimension, peak widths were much narrower, ranging from 0 to 0.1055 m/z units, with a median of around 0.0213.
+The distribution of chromatographic peak widths in the retention time dimension
+ranged from approximately 1.64 to 77.27 seconds, with a median of about 12.02
+seconds. In the m/z dimension, peak widths were much narrower, ranging from 0 to
+0.1055 m/z units, with a median of around 0.0213.
 
-We next perform the chromatographic peak refinement to reduce the number of potential *centWave*-specific peak detection artifacts. We choose settings that depend on the observed peak widths above (i.e. half of the observed average widths).
+We next perform the chromatographic peak refinement to reduce the number of
+potential *centWave*-specific peak detection artifacts. We choose settings that
+depend on the observed peak widths above **(i.e. half of the observed average
+widths)**.
 
 ```{r}
 mnpp <- MergeNeighboringPeaksParam(expandRt = 6, expandMz = 0.01)
@@ -252,7 +406,7 @@ quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
 quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
 ```
 
-we observe that peak widths had not changed after refinement
+We observe that peak widths have not changed after refinement.
 
 ```{r}
 # Extract chromatographic peaks
@@ -277,10 +431,13 @@ print(summary(intensities))
 
 ```
 
-We next perform an initial correspondence analysis that is needed for the subsequent retention time alignment. We evaluate the settings on the example m/z range from above.
+We next perform an initial correspondence analysis that is needed for the
+subsequent retention time alignment. We evaluate the settings on the example m/z
+range from above.
 
 ```{r}
 #' Extract the ion chromatogram again.
+mzr <- c(449.08, 449.12)
 a <- chromatogram(qtof, aggregationFun = "max", mz = mzr)
 
 #' Configure settings;
@@ -298,7 +455,10 @@ pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
 plotChromPeakDensity(a, param = pdp, col = col_sample)
 ```
 
-The chromatographic signals below the brown line show consistent peak patterns across samples, with detected peaks (small circles) well aligned within dense regions, indicating good peak grouping and reproducibility across retention times.
+The chromatographic signals below the brown line show consistent peak patterns
+across samples, with detected peaks (small circles) well aligned within dense
+regions, indicating good peak grouping and reproducibility across retention
+times.
 
 We focus on a smaller retention time region.
 
@@ -309,13 +469,20 @@ plotChromPeakDensity(a_sub, param = pdp, col = col_sample)
 plot(a_sub[, 10])
 ```
 
-With `bw = 6` we are able to separate the two sets of chromatographic peaks into two separate features, even given the large observed retention time shifts. We use this parameter now for the correspondence on the big data set.
+With `bw = 6` we are able to separate the two sets of chromatographic peaks into
+two separate features, even given the large observed retention time shifts. We
+use this parameter now for the correspondence on the big data set.
 
 ```{r}
 qtof <- groupChromPeaks(qtof, param = pdp)
 ```
 
-We next perform the retention time alignment. We will use the *peaks groups* method that adjusts retention times based on the observed retention time (differences) of chromatographic peaks assigned to the same feature. The method performs a retention time-dependent adjustment, i.e. based on the data, each retention time range can be adjusted by a different factor. The *smoothness* can be configured with parameter `span`.
+We next perform the retention time alignment. We will use the *Peak Groups*
+method that adjusts retention times based on the observed retention time
+(differences) of chromatographic peaks assigned to the same feature. The method
+performs a retention time-dependent adjustment, i.e. based on the data, each
+retention time range can be adjusted by a different factor. The *smoothness* can
+be configured with parameter `span`.
 
 ```{r}
 pgp <- PeakGroupsParam(
@@ -328,16 +495,21 @@ pgp <- PeakGroupsParam(
 qtof <- adjustRtime(qtof, param = pgp)
 ```
 
-Below we plot the results from the retention time alignment, i.e., the difference between the original and adjusted retention times (y-axis) along the retention time axis (x-axis).
+Below we plot the results from the retention time alignment, i.e., the
+difference between the original and adjusted retention times (y-axis) along the
+retention time axis (x-axis).
 
 ```{r}
 plotAdjustedRtime(qtof, col = paste0(col_sample, 80))
 grid()
 ```
 
-we can see that the difference between the adjusted and the raw retention time vary between -10 and 10 seconds, that is a large difference, but let's see how it affects the bcp after retention time alignment.
+We can see that the difference between the adjusted and the raw retention time
+vary between -10 and 10 seconds, that is a large difference, but let's see how
+it affects the BPC after retention time alignment.
 
-Heatmap and sample clustering based on BPC-signal after retention time alignment.
+Heatmap and sample clustering based on BPC-signal after retention time
+alignment.
 
 ```{r}
 bpc_adj <- chromatogram(qtof, aggregationFun = "max")
@@ -363,16 +535,21 @@ pheatmap(bpcmap, cluster_cols = FALSE,
 
 ```
 
-the heatmap above shows a nice separation of the S1 and S9 samples. Also, all replicated measurements show a high similarity.
+The heatmap above shows a nice separation of the S1 and S9 samples. Also, all
+replicated measurements show a high similarity.
 
--   The changes made by the retention time alignment are quite large. We evaluate the impact also on the BPC and on the extracted ion chromatogram for our example m/z range. We set `chromPeaks = "none"` to not in addition extract the peak detection results, as we are only interested in the base peak signal.
+The changes made by the retention time alignment are quite large. We evaluate
+the impact also on the BPC and on the extracted ion chromatogram for our example
+m/z range. We set `chromPeaks = "none"` to not in addition extract the peak
+detection results, as we are only interested in the base peak signal.
 
 ```{r}
 bpc_adj <- chromatogram(qtof, aggregationFun = "max", chromPeaks = "none")
 a_adj <- chromatogram(qtof, aggregationFun = "max", mz = mzr)
 ```
 
-We first plot the BPC of the original data and then of the data after retention time alignment.
+We first plot the BPC of the original data and then of the data after retention
+time alignment.
 
 ```{r}
 par(mfrow = c(2, 1))
@@ -382,25 +559,35 @@ plot(bpc_adj, col = paste0(col_sample, 80), peakType = "none")
 grid()
 ```
 
-Indeed, the data looks better aligned. We in addition evaluate the signal for the example m/z range.
+Indeed, the data looks better aligned. We in addition evaluate the signal for
+the example m/z range.
 
 ```{r}
 par(mfrow = c(2, 1))
 plot(a, col = paste0(col_sample, 80), peakType = "none")
+grid()
 plot(a_adj, col = paste0(col_sample, 80), peakType = "none")
+grid()
 ```
 
-Also here, the data seems to be better aligned. Finally, we zoom into a retention time window from 200 to 300 seconds.
+Also here, the data seems to be better aligned. Finally, we zoom into a
+retention time window from 200 to 300 seconds.
 
 ```{r}
 par(mfrow = c(2, 1))
 plot(a, col = paste0(col_sample, 80), peakType = "none",
      xlim = c(200, 300))
+grid()
 plot(a_adj, col = paste0(col_sample, 80),
      xlim = c(200, 300), peakType = "none")
+grid()
 ```
 
-We can thus conclude that the settings for the retention time alignment worked on the present data set. We continue the preprocessing with the final correspondence analysis. We adapt now the settings, in particular the `bw` parameter, that can be much stricter because of the properly aligned data set. Again, we test the settings on the extracted ion signal.
+We can thus conclude that the settings for the retention time alignment worked
+on the present data set. We continue the preprocessing with the final
+correspondence analysis. We adapt now the settings, in particular the `bw`
+parameter, that can be much stricter because of the properly aligned data
+set. Again, we test the settings on the extracted ion signal.
 
 ```{r}
 #' Configure settings
@@ -409,10 +596,12 @@ pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
 
 #' Evaluate settings on the full range
 plotChromPeakDensity(a_adj, param = pdp, col = col_sample)
-
 ```
 
-Below the brown line, each trace represents the chromatographic signal of an individual sample, and the small circles indicate the detected peak positions; aligned circles across samples suggest consistent peak detection at the same retention time.
+Below the brown line, each trace represents the chromatographic signal of an
+individual sample, and the small circles indicate the detected peak positions;
+aligned circles across samples suggest consistent peak detection at the same
+retention time.
 
 These results look promising. We also zoom into one region with multiple peaks.
 
@@ -421,13 +610,17 @@ a_adj_2 <- filterRt(a_adj, c(230, 350))
 plotChromPeakDensity(a_adj_2, param = pdp, col = col_sample)
 ```
 
-We have perfect separation of the signal from the 3 ions that have all be grouped into 3 distinct features. We thus perform the final correspondence analysis
+We have perfect separation of the signal from the 3 ions that have all be
+grouped into 3 distinct features. We thus perform the final correspondence
+analysis
 
 ```{r}
 qtof <- groupChromPeaks(qtof, param = pdp)
 ```
 
-As a final step we next perform gap-filling to reduce the number of missing values in the data set.
+As a final step we next perform gap-filling to reduce the number of missing
+values in the data set. Note that gap-filling would not be needed, as we don't
+use feature abundances in this analysis.
 
 ```{r}
 #' The number of missing values before gap filling
@@ -435,7 +628,8 @@ sum(is.na(featureValues(qtof)))
 head(featureValues(qtof))
 ```
 
-the resulting table shows a lot of "NA" missing values, so let's apply the gap-filling in order to fill in missing peaks.
+The resulting table shows a lot of "NA" missing values, so let's apply the
+gap-filling in order to fill in missing peaks.
 
 ```{r}
 #' Perform gap-filling
@@ -448,19 +642,11 @@ sum(is.na(featureValues(qtof)))
 head(featureValues(qtof))
 ```
 
-the table above shows that there is no more missing peaks. Some gap-filled signal seems however to be higher than the detected peak signal. We might eventually need to look into that later.
+The table above shows that there is no more missing peaks. Some gap-filled
+signal seem however to be higher than the detected peak signal. We might
+eventually need to look into that later.
 
-```{r}
-#' Save the result object
-save(qtof, file = "data/qtof.RData")
-```
-
-```{r}
-load("data/qtof.RData")
-head(featureValues(qtof))
-```
-
-the extracted ion chromatogram for some knowns compounds :
+The extracted ion chromatogram for some known compounds :
 
 ```{r}
 mzr <- c(287.04, 287.06)
@@ -521,9 +707,17 @@ grid()
 
 ## Evaluate precursor m/z values
 
-Depending on the software version used, DDA LC-MS/MS data from Waters might have mis-calibrated precursor-mz information stored in the mzML file. While the m/z values of all mass peaks get adjusted using the lockmass scans, the precursor m/z reported in the spectra's header seems to be not updated. We thus below compare the reported precursor m/z against a *predicted* precursor m/z. This precursor m/z is estimated based on the last MS1 scan measured before the (DDA) MS2 scan.
+Depending on the software version used, DDA LC-MS/MS data from Waters might have
+mis-calibrated precursor-mz information stored in the mzML file. While the m/z
+values of all mass peaks get adjusted using the lockmass scans, the precursor
+m/z reported in the spectra's header seems to be not updated. We thus below
+compare the reported precursor m/z against a *predicted* precursor m/z. This
+precursor m/z is estimated based on the last MS1 scan measured before the (DDA)
+MS2 scan.
 
-Both the *isolationWindowTargetMz* and *precursorMz* of all MS2 spectra are the same, thus, it is likely that the reported precursor m/z was not adjusted during lockmass calibration.
+Both the *isolationWindowTargetMz* and *precursorMz* of all MS2 spectra are the
+same, thus, it is likely that the reported precursor m/z was not adjusted during
+lockmass calibration.
 
 ```{r}
 #' Extract reported precursor m/z
@@ -537,7 +731,8 @@ sum(is.na(pmz)) - sum(is.na(epmz))
 
 ```
 
-The difference of the estimated precursor m/z to the reported precursor m/z are reported below.
+The difference of the estimated precursor m/z to the reported precursor m/z are
+reported below.
 
 ```{r}
 d <- pmz - epmz
@@ -546,7 +741,10 @@ plot(pmz, d, xlab = "precursor m/z",
 grid()
 ```
 
-Differences seem thus to be dependent on the m/z, with most estimated precursor m/z being smaller than the reported precursor m/z. Differences seem also to be relatively large. We next evaluate whether these differences are similar in all data files.
+Differences seem thus to be dependent on the m/z, with most estimated precursor
+m/z being smaller than the reported precursor m/z. Differences seem also to be
+relatively large. We next evaluate whether these differences are similar in all
+data files.
 
 ```{r}
 dl <- split(d, spectraSampleIndex(qtof))
@@ -554,9 +752,13 @@ boxplot(dl, ylab = "reported - estimated precursor")
 grid(nx = NA, ny = NULL)
 ```
 
-The distribution of differences between reported and estimated precursor m/z values is thus similar for all files.
+The distribution of differences between reported and estimated precursor m/z
+values is thus similar for all files.
 
-As a last validation we check for some MS2 spectra whether the (adjusted) precursor m/z is also reported within the fragment spectrum. For MS2 spectra it is likely that also the unfragmented ion is measured and that hence a mass peak with a m/z value similar to the precursor's m/z is present.
+As a last validation we check for some MS2 spectra whether the (adjusted)
+precursor m/z is also reported within the fragment spectrum. For MS2 spectra it
+is likely that also the unfragmented ion is measured and that hence a mass peak
+with a m/z value similar to the precursor's m/z is present.
 
 ```{r}
 #' Identify the spectra with the largest differences between reported
@@ -570,14 +772,18 @@ plotSpectra(s)
 grid()
 ```
 
-The spectrum above shows the largest difference between reported and estimated precursor m/z. It contains also a surprisingly large number of fragment peaks. The smallest differences between any fragment peak's m/z and the reported as well as the estimated precursor m/z are listed below:
+The spectrum above shows the largest difference between reported and estimated
+precursor m/z. It contains also a surprisingly large number of fragment
+peaks. The smallest differences between any fragment peak's m/z and the reported
+as well as the estimated precursor m/z are listed below:
 
 ```{r}
 min(abs(mz(s)[[1]] - pmz[i]))
 min(abs(mz(s)[[1]] - epmz[i]))
 ```
 
-The difference to the estimated precursor m/z is thus much lower. We repeat this for the 100 spectra with the largest differences.
+The difference to the estimated precursor m/z is thus much lower. We repeat this
+for the 100 spectra with the largest differences.
 
 ```{r}
 i <- idx[1:100]
@@ -593,25 +799,37 @@ b <- mapply(mzs, epmz[i], FUN = function(x, y) {
     min(abs(x - y))
 })
 
-
 boxplot(list(reported = a, estimated = b),
         ylab = "difference to m/z fragment peaks")
 grid(nx = NA, ny = NULL)
 ```
 
-For these fragment spectra, the smallest difference between the estimated precursor m/z to any mass peak in the fragment peak is considerably smaller than for the reported precursor m/z. Thus, we should use the estimated precursor m/z instead of the reported precursor m/z in subsequent analyses. Below we replace the *precursorMz* spectra variable with the estimated precursor m/z values.
+For these fragment spectra, the smallest difference between the estimated
+precursor m/z to any mass peak in the fragment peak is considerably smaller than
+for the reported precursor m/z. Thus, we should use the estimated precursor m/z
+instead of the reported precursor m/z in subsequent analyses. Below we replace
+the *precursorMz* spectra variable with the estimated precursor m/z values.
 
 ```{r}
 spectra(qtof)$original_precursor_mz <- precursorMz(spectra(qtof))
 spectra(qtof)$precursorMz <- epmz
 ```
 
-## Questions for discussion with Rebecca
+```{r}
+#' Save the result object
+save(qtof, file = "data/qtof.RData")
+```
 
--   [ ] What's next? Should we annotate the MS1 features using the MS2 DDA data?
--   [ ] Discuss the observed difference between the observed and expected precursor m/z. What should we trust?
--   [ ] No QC/sample pool data? Should we remove features with high RSD (CV) in the 3 technical replicates?
--   [ ] Discuss the gap filling issue.
+## Questions and answers
+
+-   What's next?\
+    =\> Annotating the MS1 features: First with adaptation of original Perl script (including heterodimers between neighboring features). Look up also newer available algorithms. Using the MS2 DDA data for improving annotation of MS1 features is a good idea, but not immediately a priority here, unless existing functions or algorithms are available.\
+    =\> aligning qtof negative and ftms negative experiments for flaxseeds based on existing RDynLib scripts.\
+-   Discuss the observed difference between the observed and expected precursor m/z. What should we trust?\
+    =\> In `qtof_precursormass_accuracy.qmd`, I compared the reported and predicted precursor m/z with theoretical m/z of known compounds in the analysis. Clearly predicted m/z values are much closer to the theoretical m/z values (\< 3ppm) and should be trusted.\
+-   No QC/sample pool data? Should we remove features with high RSD (CV) in the 3 technical replicates?\
+    =\> This experiment is a follow-up of a quantitative comparative analysis, set up with the goal to elucidate structurally the compounds present in flaxseed varieties S1 and S9. The purpose is not to compare the two varieties here, but only to generate spectra. No need to discard features.\
+-   Discuss the gap filling issue. =\> Does this indicate a high background (noise) signal? Also here, as the purpose was to generate spectra for compounds in varieties S1 and S9, the quantities or intensities are not so important and no need to worry here.
 
 # Session Information
 
