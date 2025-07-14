@@ -38,22 +38,26 @@ The sample/file information is retrieved from an Excel file
 *qtof_data_files.xlsx* that must meet the following minimal requirements:
 
 – A column named *data_file* containing the filenames of the *.mzML* files.
-
 – A column named *sample_name* with the corresponding sample names. The sample
-name for blank control files should be `"blank"`.
-
+  name for blank control files should be `"blank"`.
 – A column named *sample_id*.
 
-The direcotry hierarchy is as follows: – `my.workdir/data/`\
-– `my.workdir/data/sample_data/` containing the Excel file\
-– `my.workdir/data/mzml/` containing the `.mzML` files
+All files should be placed locally within the working directory containing also
+this file (i.e., *qtof-preprocessing.qmd*). The directory hierarchy is expected
+to be the following:
 
-In the following code, `my.workdir/` is the working directory:
+– *<my.workdir>/data/mzML*: directory containing all *.mzML* files.
+– *<my.workdir>/data/sample_data/*: directory containing the Excel file with the
+  sample and file information.
+
+In the following code, *<my.workdir>* is the working directory:
 
 ```{r}
-#' Define the directory containing the data
 pth <- getwd()
+pth
+```
 
+```{r}
 #' Read the table with the data files
 sample_data <- read_xlsx(file.path(pth, "data/sample_data/qtof_data_files.xlsx")) |>
     as.data.frame()
@@ -62,7 +66,7 @@ sample_data <- read_xlsx(file.path(pth, "data/sample_data/qtof_data_files.xlsx")
 sample_data <- sample_data[sample_data$sample_name != "blank", ]
 
 #' Define the file path where the mzML files are located
-fp <- file.path(pth, "data", "mzml")
+fp <- file.path(pth, "data", "mzML")
 
 #' Import the MS data
 qtof <- readMsExperiment(file.path(fp, sample_data$data_file),
@@ -70,14 +74,16 @@ qtof <- readMsExperiment(file.path(fp, sample_data$data_file),
 qtof
 ```
 
-The following code my help to create the table with data files and sample names:
+The following code may help to create the table with data files and sample
+names:
 
 ```{r}
-data_file <- list.files(path="./data/mzml",pattern="mzML")
-sample_name <-sub(data_file,  pattern=".mzML", replacement = "")
-sample_id <- substr(sample_name,1,4)
-sample_data <- data.frame(data_file,sample_name)
-write.csv(sample_data, "./data/sample_data/qtof_data_files.csv", row.names=FALSE)
+data_file <- list.files(path = "./data/mzML", pattern="mzML")
+sample_name <- sub(data_file, pattern = ".mzML", replacement = "")
+sample_id <- substr(sample_name, 1, 4)
+sample_data <- data.frame(data_file, sample_name)
+write.csv(sample_data, "data/sample_data/qtof_data_files.csv",
+          row.names = FALSE)
 ```
 
 The data files analyzed here are listed below.
@@ -87,7 +93,13 @@ pandoc.table(as.data.frame(sampleData(qtof)), caption = "Data files",
              split.table = Inf, style = "rmarkdown")
 ```
 
-For the present dataset, two different varieties of flaxseeds, S1 and S9, were analyzed. Three different *biological* replicates (a, b and c) were analyzed per variety. Each biological replicate consisted of the pooled integuments of three flaxseeds, and was analyzed with three different collision energies (3 *technical* replicates per *biological* replicate). The total number of analyses was thus: 3 *technical* replicates \* 3 *biological* replicates \* 2 *varieties* = 18 analyses).
+For the present dataset, two different varieties of flaxseeds, S1 and S9, were
+analyzed. Three different *biological* replicates (a, b and c) were analyzed per
+variety. Each biological replicate consisted of the pooled integuments of three
+flaxseeds, and was analyzed with three different collision energies (3
+*technical* replicates per *biological* replicate). The total number of analyses
+was thus: 3 *technical* replicates \* 3 *biological* replicates \* 2 *varieties*
+= 18 analyses).
 
 The number of MS1 and MS2 spectra in the present data set are listed below:
 
@@ -100,7 +112,13 @@ msLevel(spectra(qtof)) |>
 
 ## General data overview
 
-We next aim to get a closer look into the data, ideally extracting signal for individual ions (of a certain compound present in the sample) that will help us defining the settings for the chromatographic peak detection. In particular, we would like to know the width in retention time dimension, that will depend on the liquid chromatography (LC) settings used for the present data set. Without prior knowledge of the data, we need to try to find some signal to look at. We first extract the BPC of our data.
+We next aim to get a closer look into the data, ideally extracting signal for
+individual ions (of a certain compound present in the sample) that will help us
+defining the settings for the chromatographic peak detection. In particular, we
+would like to know the width in retention time dimension, that will depend on
+the liquid chromatography (LC) settings used for the present data set. Without
+prior knowledge of the data, we need to try to find some signal to look at. We
+first extract the BPC of our data.
 
 First we assign to each unique sample a unique color :
 
@@ -126,12 +144,13 @@ legend("topright", legend = names(col_sample_id), lty = 1, col = col_sample_id)
 grid()
 ```
 
-The base peak chromatography of this data shows that most of the signal is detected before 900 seconds, and after 1300 seconds noise seems to increase.
+The base peak chromatography of this data shows that most of the signal is
+detected before 900 seconds, and after 1300 seconds noise seems to increase.
 
 ## Evaluation of signal for known compounds
 
 To ensure we would not loose any signal from metabolites known to be present in
-the data set we next extract ion chromatograms for m/z ranges of known
+the data set we next extract ion chromatograms for *m/z* ranges of known
 compounds.
 
 ```{r}
@@ -140,7 +159,7 @@ kc <- read_xlsx("data/inclusionlist50_fullfragmentation.xlsx") |>
 kc <- kc[!is.na(kc$mz), ]
 ```
 
-The compounds and their respective m/z we will evaluate are listed below.
+The compounds and their respective *m/z* we will evaluate are listed below.
 
 ```{r, results = "asis"}
 pandoc.table(kc[, c("identification", "mz", "rt")],
