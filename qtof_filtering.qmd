@@ -172,7 +172,7 @@ spectraData(qtof_filtered)
 
 ```
 
-As a result we have 164 unique feature
+As a result we have 153 unique feature
 
 Now we save the object
 
