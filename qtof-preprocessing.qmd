@@ -458,7 +458,7 @@ a <- chromatogram(qtof, aggregationFun = "max", mz = mzr)
 #'   time shifts.
 #' - `minFraction`: proportion of samples (within one sample group) in which
 #'   chromatographic peaks for a feature have to be detected.
-pdp <- PeakDensityParam(sampleGroups = sampleData(ftms)$sample_id,
+pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
                         bw = 6, minFraction = 0.3, binSize = 0.1,
                         ppm = 10)
 
