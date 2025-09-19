@@ -78,7 +78,7 @@ precursorPurity <- function(object, tolerance = 0.05, ppm = 0,
 
 
 ```{r}
-load(file.path(pth, "data/qtof.RData"))
+load(file.path(pth, "data/qtof_sn2.RData"))
 qtof_neg <- spectra(qtof)
 ```
 
@@ -98,6 +98,14 @@ We next extract all MS2 spectra that can be associated to the MS1 feature:
 ```{r}
 qtof@spectra <- qtof_neg
 feature_spectra <- featureSpectra(qtof, msLevel = 2L, ppm = 10)
+```
+
+
+we verify if an MS2 Spectra is linked to more than one feature 
+```{r}
+scanIndex.per.ori <- split(feature_spectra$scanIndex, feature_spectra$dataOrigin)
+lapply(scanIndex.per.ori, function(x) any(duplicated(x)))
+lapply(scanIndex.per.ori, function(x) x[duplicated(x)])
 ```
 
 The table below summarizes the feature to MS2 spectra information.
@@ -177,7 +185,7 @@ As a result we have 153 unique feature
 Now we save the object
 
 ```{r}
-save(qtof_filtered, file = file.path(pth, "data", "qtof_filtered"))
+save(qtof_filtered, file = file.path(pth, "data", "qtof_filtered.RData"))
 ```
 
 ## Session information
