@@ -78,7 +78,7 @@ precursorPurity <- function(object, tolerance = 0.05, ppm = 0,
 
 
 ```{r}
-load(file.path(pth, "data/qtof_sn2.RData"))
+load(file.path(pth, "data/qtof.RData"))
 qtof_neg <- spectra(qtof)
 ```
 
@@ -97,7 +97,7 @@ We next extract all MS2 spectra that can be associated to the MS1 feature:
 
 ```{r}
 qtof@spectra <- qtof_neg
-feature_spectra <- featureSpectra(qtof, msLevel = 2L, ppm = 10)
+feature_spectra <- featureSpectra(dropFilledChromPeaks(qtof), msLevel = 2, skipFilled = TRUE)
 ```
 
 
