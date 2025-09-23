@@ -314,7 +314,7 @@ quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
 
 ```
 
-The distribution of chromatographic peak widths in the retention time dimension ranged from approximately 1.64 to 77.27 seconds, with a median of about 12.02 seconds. In the m/z dimension, peak widths were much narrower, ranging from 0 to 0.1055 m/z units, with a median of around 0.0213.
+The distribution of chromatographic peak widths in the retention time dimension ranged from approximately 3.02 to 101.005 seconds, with a median of about 13.91 seconds. In the m/z dimension, peak widths were much narrower, ranging from 0 to 0.1955 m/z units, with a median of around 0.0445.
 
 We next perform the chromatographic peak refinement to reduce the number of potential *centWave*-specific peak detection artifacts. We choose settings that depend on the observed peak widths above **(i.e. half of the observed average widths)**.
 
