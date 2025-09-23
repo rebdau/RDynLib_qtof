@@ -18,6 +18,8 @@ library(Spectra)
 library(xcms)
 library(MsExperiment)
 library(S4Vectors)
+library(BiocParallel)
+register(SerialParam())
 
 pth <- getwd()
 pth
@@ -38,11 +40,45 @@ spectrum as well as the precursor intensity (since that is not provided
 in the original mzML files).
 
 ```{r}
-precPurity <- precursorPurity(qtof_neg, tolerance = 0.3, ppm = 0)
-precursorIntensity <- estimatePrecursorIntensity(
-    qtof_neg, tolerance = 0.3, ppm = 0)
+precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
+   # if (is.unsorted(rtime(x)))
+    #    stop("Spectra with data origin ", dataOrigin(x[1L]),
+     #        " are not increasingly sorted by retention time.")
+    ms2_idx <- which(msLevel(x) == 2L)
+    ms1_idx <- which(msLevel(x) == 1L)
+    ratios <- rep(NA_real_, length(x))  
+    pmzs <- precursorMz(x)
+    for (i in ms2_idx) {
+        ratio <- NA_real_
+        j <- ms1_idx[ms1_idx < i]
+        
+        if (length(j)) {
+            j <- j[length(j)]
+            s1 <- filterMzRange(
+                x[j], c(pmzs[i] + c(-1, 1) * (tolerance + pmzs[i] * ppm / 1e6)))
+            
+            pks <- peaksData(s1, c("mz", "intensity"))[[1L]]
+            
+            if (nrow(pks)) {
+                intensities <- pks[, 2L]
+                ratio <- max(intensities) / sum(intensities)
+            }
+        }
+        
+        ratios[i] <- ratio
+    }
+    
+    ratios
+}
+```
+
+```{r}
+precPurity <- precursorPurity(qtof_neg)
+spectraData(qtof_neg)$precursorIntensity <- NULL
+precursorIntensity <- estimatePrecursorIntensity(qtof_neg, tolerance = 0.3, ppm = 10)
 qtof_neg$precursorPurity <- precPurity
 qtof_neg$precursorIntensity <- precursorIntensity
+spectraData(qtof_neg)
 ```
 
 We next extract all MS2 spectra that can be associated to the MS1
@@ -124,7 +160,7 @@ spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex ==  1816 & s
 The two features has the same mzmed, and a large difference in retention
 time, the first has 826.336 and the second 813.282 seconds.
 
-# Some Visualization of the duplicated assignments 
+# Some Visualization of the duplicated assignments
 
 ```{r}
 ids2 <- c("FT15816", "FT15821")
@@ -139,13 +175,13 @@ abline(v = 642.251, col = "red", lty = 2)
 
 ```{r}
 #' Get the ambiguous MS2 for current feature
-fid_ms2_mult <- intersect(ms2_mult, ms2_id[ms2$feature_id == "FT15816"])
+fid_ms2_mult <- intersect(ms2_mult, ms2_id[feature_spectra$feature_id == "FT15816"])
 #' Get the other features for the ambiguous MS2 of current feature
-fid_other_features <- setdiff(ms2$feature_id[ms2_id %in% fid_ms2_mult], "FT15821")
+fid_other_features <- setdiff(feature_spectra$feature_id[ms2_id %in% fid_ms2_mult], "FT15821")
 other_eic <- featureChromatograms(qtof, features = "FT15821")
 
 
-fid_ms2 <- ms2[ms2$feature_id == "FT15816"]
+fid_ms2 <- feature_spectra[feature_spectra$feature_id == "FT15816"]
 fid_eic <- featureChromatograms(qtof, features = "FT15816")
 
 par(mfrow = c(2, 1))
@@ -181,7 +217,7 @@ rect(xleft = b[, "rtmin"], xright = b[, "rtmax"],
 ```
 
 ```{r}
-a <- ms2[ms2_id == ms2_mult[3L]]
+a <- feature_spectra[ms2_id == ms2_mult[3L]]
 print(spa <- spectraData(a))
 
 a_chr <- featureChromatograms(qtof, features = a$feature_id)
@@ -197,7 +233,7 @@ abs(ms2_rt[1] - spa$feature_rtmed[1])/abs(ms2_rt[2] - spa$feature_rtmed[2])
 ```
 
 ```{r}
-a <- ms2[ms2_id == ms2_mult[5L]]
+a <- feature_spectra[ms2_id == ms2_mult[5L]]
 print(spa <- spectraData(a))
 
 a_chr <- featureChromatograms(qtof, features = a$feature_id)
