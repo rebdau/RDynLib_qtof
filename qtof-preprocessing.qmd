@@ -319,7 +319,7 @@ The distribution of chromatographic peak widths in the retention time dimension 
 We next perform the chromatographic peak refinement to reduce the number of potential *centWave*-specific peak detection artifacts. We choose settings that depend on the observed peak widths above **(i.e. half of the observed average widths)**.
 
 ```{r}
-mnpp <- MergeNeighboringPeaksParam(expandRt = 10, expandMz = 0.01,
+mnpp <- MergeNeighboringPeaksParam(expandRt = 7, expandMz = 0.01,
                                    minProp = 0.66)
 qtof <- refineChromPeaks(qtof, mnpp)
 ```
@@ -343,7 +343,7 @@ quantile(unname(pks[, "rtmax"] - pks[, "rtmin"]))
 quantile(unname(pks[, "mzmax"] - pks[, "mzmin"]))
 ```
 
-We observe that peak widths have not changed after refinement.
+We observe that peak widths increased after refinement.
 
 ```{r}
 # Calculate peak widths in RT and m/z
@@ -436,7 +436,7 @@ qtof <- filterChromPeaks(qtof, keep = which(beta_metrics[, "beta_cor"] > 0))
 We evaluate the number of peaks and the observed peak widths.
 
 ```{r}
-pks <- chromPeaks(ftms)
+pks <- chromPeaks(qtof)
 nrow(pks)
 table(pks[, "sample"])
 quantile(unname(pks[,"rtmax"] - pks[,"rtmin"]))
@@ -768,7 +768,7 @@ spectra(qtof)$precursorMz <- epmz
 
 ```{r}
 #' Save the result object
-save(qtof, file = "data/qtof_sn2.RData")
+save(qtof, file = "data/qtof.RData")
 ```
 
 ## Questions and answers
