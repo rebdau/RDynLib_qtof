@@ -46,30 +46,32 @@ precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
      #        " are not increasingly sorted by retention time.")
     ms2_idx <- which(msLevel(x) == 2L)
     ms1_idx <- which(msLevel(x) == 1L)
-    ratios <- rep(NA_real_, length(x))  
+    ratios <- rep(NA_real_, length(x))
     pmzs <- precursorMz(x)
     for (i in ms2_idx) {
         ratio <- NA_real_
         j <- ms1_idx[ms1_idx < i]
-        
+
         if (length(j)) {
             j <- j[length(j)]
             s1 <- filterMzRange(
                 x[j], c(pmzs[i] + c(-1, 1) * (tolerance + pmzs[i] * ppm / 1e6)))
-            
+
             pks <- peaksData(s1, c("mz", "intensity"))[[1L]]
-            
+
             if (nrow(pks)) {
                 intensities <- pks[, 2L]
                 ratio <- max(intensities) / sum(intensities)
             }
         }
-        
+
         ratios[i] <- ratio
     }
-    
+
     ratios
 }
+
+
 ```
 
 ```{r}
@@ -298,100 +300,79 @@ assignments. All other assignments are dropped for the respective
 feature.
 
 ```{r}
-select_unique_MS2 <- function(ms2, qtof, threshold = 0.002) {
+filter_unique_MS2 <- function(ms2, threshold = 0.002) {
 
   sp <- spectraData(ms2)
+  #'group by dataOrigin and scanIndex to identify
+  #'duplicated assignments in each dataOrigin
+  sp$ms2_id <- paste0(sp$dataOrigin, "_", sp$scanIndex)
+  sp$feature_id <- as.character(sp$feature_id)
+  sp$ambiguous <- vector("list", nrow(sp))
 
-  # Crée un identifiant unique pour chaque groupe (dataOrigin + scanIndex)
-  sp$groups <- paste0(sp$dataOrigin, "_", sp$scanIndex)
+  # Find duplicated MS2
+  ms2_table <- table(sp$ms2_id)
+  duplicated_ms2 <- names(ms2_table)[ms2_table > 1]
+  # keep unique MS2 assignments directly
+  keep_rows <- which(!sp$ms2_id %in% duplicated_ms2)  
 
-  # Indices de chaque groupe
-  group_idx <- split(seq_len(nrow(sp)), sp$groups)
+  if (length(duplicated_ms2) > 0) {
+    # Get indices of duplicated MS2
+    dup_idx <- which(sp$ms2_id %in% duplicated_ms2)
 
-  # Initialisation
-  sp$is_ambiguous <- FALSE
-  sp$is_ambiguous[sp$groups %in% names(group_idx)[lengths(group_idx) > 1]] <- TRUE
-  final_feature <- vector("list", nrow(sp))
-  amb_f <- vector("list", nrow(sp))
+    # Split by ms2_id
+    dup_groups <- split(dup_idx, sp$ms2_id[dup_idx])
 
-  for (gname in names(group_idx)) {
-    gidx <- group_idx[[gname]]
-    feature_ids <- unique(sp$feature_id[gidx])
+    for (ms2_name in names(dup_groups)) {
+      idx <- dup_groups[[ms2_name]]
+      feature_ids <- sp$feature_id[idx]
 
-    # Si un seul feature, on le garde et rien n'est ambigu
-    if (length(feature_ids) == 1) {
-      final_feature[gidx] <- rep(list(feature_ids), length(gidx))
-      amb_f[gidx] <- rep(list(character(0)), length(gidx))
-      next
+      ms2_mz <- precursorMz(ms2)[idx[1]]
+      ms2_rt <- rtime(ms2)[idx[1]]
+
+      mz_features <- sp$feature_mzmed[idx]
+      rt_features <- sp$feature_rtmed[idx]
+
+      # m/z filter
+      valid <- feature_ids[abs(ms2_mz - mz_features) <= threshold]
+
+      if (length(valid) == 0) {
+        # Keep first row, all features in ambiguous
+        keep_row <- idx[1]
+        sp$ambiguous[keep_row] <- list(feature_ids)
+        keep_rows <- c(keep_rows, keep_row)
+        next
+      }
+
+      # pick closest by RT if multiple
+      if (length(valid) > 1) {
+        rt_diff <- abs(ms2_rt - rt_features[match(valid, feature_ids)])
+        keep_feat <- valid[which.min(rt_diff)]
+      } else {
+        keep_feat <- valid
+      }
+
+      # Keep only row corresponding to selected feature
+      keep_row <- idx[which(feature_ids == keep_feat)[1]]
+      keep_rows <- c(keep_rows, keep_row)
+
+      # Store all other original features as ambiguous
+      sp$ambiguous[keep_row] <- list(setdiff(feature_ids, keep_feat))
     }
-
-    # MS2 precursor m/z et RT
-    ms2_mz <- precursorMz(ms2)[gidx[1]]
-    ms2_rt <- rtime(ms2)[gidx[1]]
-
-    # mz et rt des features
-    mz_features <- featureDefinitions(qtof)[feature_ids, "mzmed"]
-    rt_features <- featureDefinitions(qtof)[feature_ids, "rtmed"]
-
-    # Filtre par m/z
-    mz_diff <- abs(ms2_mz - mz_features)
-    valid_features <- feature_ids[mz_diff <= threshold]
-
-    # Si aucune feature valide, tout est ambigu
-    if (length(valid_features) == 0) {
-      final_feature[gidx] <- rep(list(character(0)), length(gidx))
-      amb_f[gidx] <- rep(list(feature_ids), length(gidx))
-      next
-    }
-
-    # Si une seule feature valide, on la garde
-    if (length(valid_features) == 1) {
-      keep_feat <- valid_features
-      final_feature[gidx] <- rep(list(keep_feat), length(gidx))
-      amb_f[gidx] <- rep(list(setdiff(feature_ids, keep_feat)), length(gidx))
-      next
-    }
-
-    # Plusieurs features valides : on garde celle la plus proche en RT
-    rt_diff <- abs(ms2_rt - rt_features[valid_features])
-    min_idx <- which.min(rt_diff)
-    keep_feat <- valid_features[min_idx]
-
-    # Assigne la feature retenue et les ambiguës à tous les indices du groupe
-    final_feature[gidx] <- rep(list(keep_feat), length(gidx))
-    amb_f[gidx] <- rep(list(setdiff(feature_ids, keep_feat)), length(gidx))
   }
 
-  # Mise à jour de l'objet MS2
-  ms2$is_ambiguous <- sp$is_ambiguous
-  ms2$feature_id <- sapply(final_feature, function(x) if(length(x) == 0) NA_character_ else x)
-  ms2$ambiguous <- amb_f
+  ms2_filtered <- ms2[keep_rows, ]
+  sp_final <- spectraData(ms2_filtered)
+  sp_final$ambiguous <- sp$ambiguous[keep_rows]
+  spectraData(ms2_filtered) <- sp_final
 
-  # COLLAPSE des MS2 dupliqués (on garde la première ligne par groupe)
-  unique_groups <- !duplicated(paste0(ms2$dataOrigin, "_", ms2$scanIndex))
-  ms2 <- ms2[unique_groups, ]
-
-  # Remplir feature_id à partir des ambiguës si feature_id est NA
-  missing_idx <- is.na(ms2$feature_id)
-  ms2$feature_id[missing_idx] <- sapply(ms2$ambiguous[missing_idx], function(x) {
-    if(length(x) == 0) return(NA_character_)
-    x[1]  # On choisit le premier feature comme sélection
-  })
-
-  # Supprimer le feature sélectionné de la liste ambiguous
-  ms2$ambiguous <- lapply(seq_along(ms2$ambiguous), function(i) {
-    setdiff(ms2$ambiguous[[i]], ms2$feature_id[i])
-  })
-
-  ms2
+  ms2_filtered
 }
 
 
 
 
 
-
-qtof_filtered <- select_unique_MS2(feature_spectra, qtof, threshold = 0.002)
+qtof_filtered <- filter_unique_MS2(feature_spectra, threshold = 0.002)
 ```
 
 ```{r}
@@ -415,7 +396,11 @@ spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  1474 & spect
 ```
 
 ```{r}
-spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  98 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Ra-neg-DDA2.mzML",]
+spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex == 1478 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
+```
+
+```{r}
+spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  1816 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rc-neg-DDA2.mzML",]
 ```
 
 the result shows that duplicated spectra are removed
