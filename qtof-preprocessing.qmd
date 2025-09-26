@@ -299,10 +299,10 @@ All previously characterized LC-MS features fall within the selected retention t
 We next perform the **chromatographic peak detection** using the *centWave* algorithm. With `integrate = 2` we use an alternative algorithm to correctly identify the boundaries of the identified chromatographic peaks. Parameter `chunkSize` is used to control the number of files from which the data should be loaded into memory at a time.
 
 ```{r}
-qtof <- findChromPeaks(qtof, CentWaveParam(peakwidth = c(8, 20), integrate = 2, snthresh = 6, ppm = 50, prefilter = c(3, 500), mzdiff = 0.001),
+qtof <- findChromPeaks(
+    qtof, CentWaveParam(peakwidth = c(8, 20), integrate = 2, snthresh = 6,
+                        ppm = 25, prefilter = c(3, 500), mzdiff = 0.001),
  chunkSize = 2)
-
-
 ```
 
 With this setting we identified `r nrow(chromPeaks(qtof))` peaks in the full data set. The distribution of the peak widths in retention time and in m/z dimensions are:
@@ -319,8 +319,8 @@ The distribution of chromatographic peak widths in the retention time dimension 
 We next perform the chromatographic peak refinement to reduce the number of potential *centWave*-specific peak detection artifacts. We choose settings that depend on the observed peak widths above **(i.e. half of the observed average widths)**.
 
 ```{r}
-mnpp <- MergeNeighboringPeaksParam(expandRt = 7, expandMz = 0.01,
-                                   minProp = 0.66)
+mnpp <- MergeNeighboringPeaksParam(expandRt = 2, expandMz = 0.001,
+                                   minProp = 0.75)
 qtof <- refineChromPeaks(qtof, mnpp)
 ```
 
@@ -577,7 +577,8 @@ We can thus conclude that the settings for the retention time alignment worked o
 ```{r}
 #' Configure settings
 pdp <- PeakDensityParam(sampleGroups = sampleData(qtof)$sample_id,
-                        bw = 2, minFraction = 0.3)
+                        bw = 2, minFraction = 0.3, binSize = 0.1,
+                        ppm = 10)
 
 #' Evaluate settings on the full range
 plotChromPeakDensity(a_adj, param = pdp, col = col_sample)
