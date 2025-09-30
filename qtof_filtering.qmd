@@ -89,18 +89,53 @@ feature:
 ```{r}
 qtof@spectra <- qtof_neg
 feature_spectra <- featureSpectra(dropFilledChromPeaks(qtof), msLevel = 2, skipFilled = TRUE)
+spectraData(feature_spectra)
+```
+
+\
+Before centroiding:
+
+```{r}
+peaksData(feature_spectra)[[1]]
+```
+
+Print the peaks data for the example feature "FT17578" before
+centroiding
+
+```{r}
+peaksData(feature_spectra)[spectraData(feature_spectra)$feature_id == "FT17578", ][[1]]
+```
+
+Centroiding the MS2 data
+
+```{r}
+feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 5L, k = 1L)
+```
+
+After centroiding
+
+```{r}
+peaksData(feature_spectra_centro)[[1]]
+```
+
+Print the peaks data for the example feature "FT17578" after centroiding
+
+```{r}
+peaksData(feature_spectra_centro)[spectraData(feature_spectra_centro)$feature_id == "FT17578", ][[1]]
+
 ```
 
 we verify if an MS2 Spectra is linked to more than one feature
 
 ```{r}
-scanIndex.per.ori <- split(feature_spectra$scanIndex, feature_spectra$dataOrigin)
+scanIndex.per.ori <- split(feature_spectra_centro$scanIndex, feature_spectra_centro$dataOrigin)
 lapply(scanIndex.per.ori, function(x) any(duplicated(x)))
 lapply(scanIndex.per.ori, function(x) x[duplicated(x)])
+
 ```
 
 ```{r}
-ms2_id <- paste0(feature_spectra$dataOrigin, "_", feature_spectra$acquisitionNum)
+ms2_id <- paste0(feature_spectra_centro$dataOrigin, "_", feature_spectra_centro$acquisitionNum)
 ms2_table <- table(ms2_id)
 ms2_mult <- names(ms2_table)[ms2_table > 1]
 length(ms2_mult)
@@ -108,182 +143,7 @@ length(ms2_mult)
 
 There is `r length(ms2_mult)` duplicated assignment
 
-# Here we print the `spectraData()` of each MS2 that was assigned to different features in the same sample:
-
-\*\* First file \*\*
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex == 226 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML" ,]
-
-```
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex == 1460 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex == 1462 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex == 1464 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex == 1478 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex ==  1474 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-Except the MS2 with th scan Index 226, all the other peaks were assigned
-multiple times to the "FT15816" and "FT15816" features, both of those
-features have a very close mzmed, that differs just by 0.001 and a large
-difference in retention time, the first has 661.481 and the second
-642.251 seconds.
-
-\*\* Second file \*\*
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex ==  98 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Ra-neg-DDA2.mzML",]
-```
-
-The two features has an mzmed difference of 0.033, and a large
-difference in retention time, the first has 73.4488 and the second
-59.6624 seconds.
-
-\*\* third and final file \*\*
-
-```{r}
-spectraData(feature_spectra)[spectraData(feature_spectra)$scanIndex ==  1816 & spectraData(feature_spectra)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rc-neg-DDA2.mzML",]
-```
-
-The two features has the same mzmed, and a large difference in retention
-time, the first has 826.336 and the second 813.282 seconds.
-
-# Some Visualization of the duplicated assignments
-
-```{r}
-ids2 <- c("FT15816", "FT15821")
-a_chr2 <- featureChromatograms(qtof, features = ids2)
-
-plot(a_chr2[1])
-abline(v = 661.481 , col = "red", lty = 2)
-
-plot(a_chr2[2])
-abline(v = 642.251, col = "red", lty = 2)
-```
-
-```{r}
-#' Get the ambiguous MS2 for current feature
-fid_ms2_mult <- intersect(ms2_mult, ms2_id[feature_spectra$feature_id == "FT15816"])
-#' Get the other features for the ambiguous MS2 of current feature
-fid_other_features <- setdiff(feature_spectra$feature_id[ms2_id %in% fid_ms2_mult], "FT15821")
-other_eic <- featureChromatograms(qtof, features = "FT15821")
-
-
-fid_ms2 <- feature_spectra[feature_spectra$feature_id == "FT15816"]
-fid_eic <- featureChromatograms(qtof, features = "FT15816")
-
-par(mfrow = c(2, 1))
-plot(fid_eic)
-grid()
-abline(v = rtime(fid_ms2), col = "blue")
-abline(v = rtime(feature_spectra)[ms2_id %in% fid_ms2_mult], col = "red")
-
-plot(other_eic)
-grid()
-abline(v = rtime(fid_ms2), col = "blue")
-abline(v = rtime(feature_spectra)[ms2_id %in% fid_ms2_mult], col = "red")
-```
-
-all the 10 spectra from the first file are present in both the first and
-the second features
-
-```{r}
-#' Getting the chromatographic peaks assigned to the first and to the
-#' second feature
-a <- chromPeaks(qtof)[featureDefinitions(qtof)["FT15816", "peakidx"][[1L]], ]
-b <- chromPeaks(qtof)[featureDefinitions(qtof)[
-                   fid_other_features, "peakidx"][[1L]], ]
-
-par(mfrow = c(1, 1))
-plot(1, 1, pch = NA, xlim = range(rbind(a, b)[, c("rtmin", "rtmax")]),
-     ylim = range(rbind(a, b)[, c("mzmin", "mzmax")]))
-grid()
-rect(xleft = a[, "rtmin"], xright = a[, "rtmax"],
-     ybottom = a[, "mzmin"], ytop = a[, "mzmax"], border = "#ff000080")
-rect(xleft = b[, "rtmin"], xright = b[, "rtmax"],
-     ybottom = b[, "mzmin"], ytop = b[, "mzmax"], border = "#0000ff80", lty = 2)
-```
-
-```{r}
-a <- feature_spectra[ms2_id == ms2_mult[3L]]
-print(spa <- spectraData(a))
-
-a_chr <- featureChromatograms(qtof, features = a$feature_id)
-par(mfrow = c(1, 2))
-plot(a_chr[1])
-abline(v = a$rtime, col = "red")
-plot(a_chr[2])
-abline(v = a$rtime, col = "red")
-
-ms2_rt <- a$rtime
-abs(ms2_rt - spa$feature_rtmed)
-abs(ms2_rt[1] - spa$feature_rtmed[1])/abs(ms2_rt[2] - spa$feature_rtmed[2])
-```
-
-```{r}
-a <- feature_spectra[ms2_id == ms2_mult[5L]]
-print(spa <- spectraData(a))
-
-a_chr <- featureChromatograms(qtof, features = a$feature_id)
-par(mfrow = c(1, 2))
-plot(a_chr[1])
-abline(v = a$rtime, col = "red")
-plot(a_chr[2])
-abline(v = a$rtime, col = "red")
-
-ms2_rt <- a$rtime
-abs(ms2_rt - spa$feature_rtmed)
-abs(ms2_rt[1] - spa$feature_rtmed[1])/abs(ms2_rt[2] - spa$feature_rtmed[2])
-```
-
-```{r}
-# Extract peaks table
-pks <- chromPeaks(qtof)
-
-# Compute peakwidths
-pw <- pks[, "rtmax"] - pks[, "rtmin"]
-
-
-# Problematic IDs
-problem_ids <- c("CP082844", "CP406275")
-
-# Subset the peaks
-problem_pks <- pks[rownames(pks) %in% problem_ids, , drop = FALSE]
-
-# Add peakwidth column
-problem_pks <- cbind(problem_pks, peakwidth = problem_pks[, "rtmax"] - problem_pks[, "rtmin"])
-
-# Show them
-problem_pks
-
-# Position in distribution (percentile)
-problem_percentiles <- sapply(problem_pks[, "peakwidth"], function(x) ecdf(pw)(x) * 100)
-
- data.frame(
-   chrom_peak_id = rownames(problem_pks),
-   peakwidth = problem_pks[, "peakwidth"],
-   percentile = round(problem_percentiles, 2)
- )
-
-
-
-```
-
-# Resolving multiple assignments of MS2 spectra to features
+# In case of duplicated assignments: Resolving multiple assignments of MS2 spectra to features
 
 We next evaluate the cases above to reduce/remove the multiple
 assignments and keep only a single MS2-feature association. First, we
@@ -372,125 +232,91 @@ filter_unique_MS2 <- function(ms2, threshold = 0.002) {
 
 
 
-qtof_filtered <- filter_unique_MS2(feature_spectra, threshold = 0.002)
+qtof_filtered <- filter_unique_MS2(feature_spectra_centro, threshold = 0.002)
 ```
+
+Removing the 10% with lowest purity
 
 ```{r}
-ms2_id <- paste0(qtof_filtered$dataOrigin, "_", qtof_filtered$acquisitionNum)
-ms2_table <- table(ms2_id)
-ms2_mult <- names(ms2_table)[ms2_table > 1]
-length(ms2_mult)
-```
-
-Now after applying select_unique_MS2() function we don't have multiple
-assignment
-
-Now we test on some peaks that were assigned to more than one feature
-
-```{r}
-spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  98 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Ra-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  1474 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex == 1478 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rb-neg-DDA2.mzML",]
-```
-
-```{r}
-spectraData(qtof_filtered)[spectraData(qtof_filtered)$scanIndex ==  1816 & spectraData(qtof_filtered)$dataOrigin == "C:\\Users\\amentag\\Desktop\\these\\These\\clones\\new_clones\\RDynLib_qtof\\data\\mzml\\S1Rc-neg-DDA2.mzML",]
-```
-
-the result shows that duplicated spectra are removed
-
-The table below summarizes the feature to MS2 spectra information.
-
-```{r, results = "asis"}
-library(pander)
-tmp <- data.frame(no_features = nrow(featureDefinitions(qtof)),
-                  no_features_ms2 = length(unique(feature_spectra$feature_id)),
-                  no_selected_ms2 = length(feature_spectra)
-                  )
-pandoc.table(
-    tmp, style = "rmarkdown",
-    caption = paste0("Total number of features, features for which an MS2 was",
-                     " found and number of selected MS2 spectra."))
-```
-
-Only for very few features an MS2 spectrum was found/defined.
-
-#Now we process the selected MS2 spectra to select the *best
-representative* MS2 spectrum per feature:
-
-Select the 10 % spectra with highest precursor purity
-
-```{r}
-library(dplyr)
-
-# Extract the spectra data and fragment counts
-purity_df <- as.data.frame(spectraData(qtof_filtered)) |>
+# extract the spectra data as a dataframe
+purity_df <- as.data.frame(spectraData(feature_spectra_centro)) %>%
   mutate(
-    fragment_count = lengths(qtof_filtered),
-    index = row_number()
+    index = row_number(),
+    f = paste(feature_id, "|", collisionEnergy)  
   )
 
-purity_top <- purity_df |>
-    group_by(feature_id) |>
-    arrange(desc(precursorPurity)) |>
-    mutate(n_rows = n(),
-           top_n = ceiling(n_rows * 0.10),
-           row_number = row_number()) |>
-    filter(row_number <= top_n) |>
-    select(-n_rows, -top_n, -row_number)
+
+keep_idx <- purity_df %>%
+  group_by(f) %>%
+  arrange(precursorPurity) %>%
+  mutate(
+    n_rows = n(),
+    cutoff = ceiling(n_rows * 0.10),   # 10% lowest
+    row_number = row_number()
+  ) %>%
+  filter(row_number > cutoff) %>%
+  pull(index)
+
+
+ms2_qtof <- feature_spectra_centro[keep_idx]
 
 ```
 
-Of these spectra select the 10 % spectra with highest precursor
-intensity
+test the results on the previous feature
 
 ```{r}
-intensity_top <- purity_top |>
-  group_by(feature_id) |>
-  arrange(desc(precursorIntensity)) |>
-  mutate(n_rows = n(),
-         top_n = ceiling(n_rows * 0.10),
-         row_number = row_number()) |>
-  filter(row_number <= top_n) |>
-  select(-n_rows, -top_n, -row_number)
-
+peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
 ```
 
-Of these spectra select the spectrum with highest number of fragments
+create a single spectrum for each feature per collision energy, keeping
+only fragments that are present in 50% of spectra
 
 ```{r}
-final_selected <- intensity_top |>
-  group_by(feature_id) |>
-  filter(fragment_count == max(fragment_count, na.rm = TRUE)) |>
-  slice_head(n = 1) # in case of tie
+# grouping by feature_id and collision energy
+f <- paste(ms2_qtof$feature_id, "|", ms2_qtof$collisionEnergy)
+ms2_qtof <- combineSpectra(ms2_qtof, ppm = 5, peaks = "intersect", minProp = 0.5, 
+    intensityFun = max, f = f, p = rep(1L, length(ms2_qtof)))
+```
 
-# Extract those spectra from original object
-qtof_filtered <- qtof_filtered[final_selected$index]
+test the results on the previous feature
 
-# Check number of unique features retained
-length(unique(spectraData(qtof_filtered)$feature_id))
-spectraData(qtof_filtered)
+```{r}
+peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
+```
 
+grouping by feature_id for different collision energies
+
+```{r}
+# grouping by feature_id for different collision energies
+f = ms2_qtof$feature_id
+ms2_qtof <- combineSpectra(ms2_qtof, ppm = 5, peaks = "union",intensityFun = sum,
+                                       f = f, p = rep(1L, length(ms2_qtof)))
 ```
 
 ```{r}
-length(unique(unlist(qtof_filtered$feature_id)))
-
+spectraData(ms2_qtof)$spectrum_type <- "merged_MSMS_all_energies"
 ```
 
-As a result we have
-`r length(unique(spectraData(qtof_filtered)$feature_id))` unique feature
+test the results on the previous feature to visualize the final selected
+peaks for this feature
+
+```{r}
+peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
+```
+
+```{r}
+length(unique(unlist(ms2_qtof$feature_id)))
+
+length(unique(spectraData(ms2_qtof)$feature_id))
+```
+
+As a result we have `r length(unique(spectraData(ms2_qtof)$feature_id))`
+unique feature
 
 Now we save the object
 
 ```{r}
-save(qtof_filtered, file = file.path(pth, "data", "qtof_filtered.RData"))
+save(ms2_qtof, file = file.path(pth, "data", "ms2_qtof.RData"))
 ```
 
 ## Session information
