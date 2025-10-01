@@ -1,0 +1,206 @@
+---
+title: "Inspect_precursor_mz"
+tbl-cap-location: bottom
+editor: visual
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+# Introduction
+
+Flaxseed integuments of the same varieties as analyzed in the present experiment (S1 and S9), have been previously analyzed by LC-MSn (ftms), and 50 compounds have been identified or partially characterized. For **45** of these compounds a **molecular formula** has been proposed. The m/z values of these compounds have been used as an inclusion list for fragmentation in the present LC-QTOF analyses. The molecular formulas of these compounds are available in an .xlsx file. Here we will evaluate the differences between the **theoretical m/z of the known compounds** and the **reported precursor m/z** and **predicted precursor m/z** of the fragmentation spectra in the LC-QTOF analysis. We will also identify the spectra that correspond to known compounds of the ftms experiment.
+
+# Data import
+
+We first load all required R packages for the analysis in this document.
+
+```{r}
+#| message: false
+
+#' Load required libraries
+library(xcms)
+library(MsExperiment)
+library(Spectra)
+library(readxl)
+library(rcdk)
+library(ggplot2)
+```
+
+Read the table with MS data from known compounds and the XcmsExperiment object created in qtof-preprocessing.qmd
+
+```{r}
+#' Read the table with MS data from known compounds
+pth <- getwd()
+knowns <- read_xlsx(file.path(pth, "data/compound_data/inclusionlist50_fullfragmentation.xlsx")) |>as.data.frame()
+knowns <- knowns[!knowns$charged_Formula=="NA",]
+
+#' Import the XcmsExperiment object
+load("data/qtof.RData")
+qtof
+```
+
+Get the theoretical masses of the known compounds based on their molecular formula. The `charged_Formula` corresponds to \[M-H\] for a single charged compound and to \[M-2H\] for a double charged compound. The charge of the compounds detected in a previous LC-MS experiment is in column `z`.
+
+```{r}
+# Create lists of "charged formula" and charge
+formula.list <- split(knowns$charged_Formula,f=as.factor(1:nrow(knowns)))
+charge.list <- split(knowns$z, f=as.factor(1:nrow(knowns)))
+
+# Combine formula and charge into list of lists
+input.list <- Map(list, formula.list, charge.list)
+
+#create function to extract the m/z value of the charged features 
+get_m.over.z <- function(f,z) {
+  formula <- get.formula(f)
+  monoisotopicmass <- formula@mass
+  m.over.z <- monoisotopicmass/z
+  return(m.over.z)
+}
+
+
+# Apply the get_m.over.z function to each formula-charge pair using lapply
+mzknown <- lapply(input.list, function(x) get_m.over.z(x[[1]], x[[2]]))
+
+# Unlist the result to get a numeric vector
+mzknown <- unlist(mzknown) 
+
+```
+
+```{r}
+#' Extract reported precursor m/z
+pmz <- precursorMz(spectra(qtof))
+pmz_clean <- pmz[!is.na(pmz)]
+#' Estimate precursor m/z
+epmz <- estimatePrecursorMz(spectra(qtof),
+                            tolerance = 0.05, ppm = 20)
+epmz_clean <- epmz[!is.na(epmz)]
+```
+
+The smallest differences between any known compound's monoisotopic m/z and the reported as well as the estimated precursor m/z are listed below:
+
+```{r}
+#' Calculate difference to the reported precursor.
+min_diffs_pmz <- sapply(mz, function(x) {
+  min(abs(x - pmz_clean))
+})
+min_diffs_epmz <- sapply(mz, function(x) {
+  min(abs(x - epmz_clean))
+})
+
+summary(min_diffs_pmz)
+summary(min_diffs_epmz)
+min_diffs_pmz <- min_diffs_pmz[min_diffs_pmz<0.1]
+min_diffs_epmz <- min_diffs_epmz[min_diffs_epmz<0.1]
+boxplot(list(reported = min_diffs_pmz, estimated = min_diffs_epmz),
+        ylab = "difference to theoretical m/z of known features")
+grid(nx = NA, ny = NULL)
+```
+The differences between theoretical m/z values and estimated precursor m/z values are much smaller than between theoretical m/z values and reported precursor m/z value. Now we will have a look at the smallest differences, expressed in parts per million (ppm) for each of the theoretical m/z values.
+
+```{r}
+# Use lapply to calculate ppm differences for each mz
+ppm_diff_list <- lapply(mz, function(m) {
+  ppm <- abs(pmz - m) / m * 1e6         # Compute ppm difference
+  head(sort(ppm), 10)                   # Take 10 smallest
+})
+
+# Name each list element for clarity
+names(ppm_diff_list) <- paste ("mz", sprintf("%.4f", mz))
+
+# Identify mz values where all 10 ppm diffs < 50
+valid_mz <- sapply(ppm_diff_list, function(ppm) all(ppm < 50))
+
+# Filter list to include only those with all < 50 ppm
+low_ppm_list <- ppm_diff_list[valid_mz]
+
+# Report how many mz values passed the filter
+cat("Number of mz values, out of 45 known molecular formulas, with all 10 lowest differences < 50 ppm:", length(low_ppm_list), "\n")
+
+# Reshape for plotting
+library(reshape2)
+ppm_df <- melt(low_ppm_list)
+colnames(ppm_df) <- c("ppm_diff", "theoretical_mz")
+
+ggplot(ppm_df, aes(x = theoretical_mz, y = ppm_diff)) +
+  geom_boxplot(fill = "steelblue") +
+  labs(title = "Reported Precursor m/z: Boxplots of 10 Lowest PPM Differences (<50 ppm)",
+       x = "mz Value",
+       y = "PPM Difference") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+```
+Now we do the same for the **estimated precursor m/z values**.
+
+```{r}
+# Use lapply to calculate ppm differences for each mz
+ppm_diff_list <- lapply(mz, function(m) {
+  ppm <- abs(epmz - m) / m * 1e6         # Compute ppm difference
+  head(sort(ppm), 10)                   # Take 10 smallest
+})
+
+# Name each list element for clarity
+names(ppm_diff_list) <- paste ("mz", sprintf("%.4f", mz))
+
+# Identify mz values where all 10 ppm diffs < 50
+valid_mz <- sapply(ppm_diff_list, function(ppm) all(ppm < 50))
+
+# Filter list to include only those with all < 50 ppm
+low_ppm_list <- ppm_diff_list[valid_mz]
+
+# Report how many mz values passed the filter
+cat("Number of mz values, out of 45 known molecular formulas, with all 10 lowest differences < 50 ppm:", length(low_ppm_list), "\n")
+
+# Reshape for plotting
+library(reshape2)
+ppm_df <- melt(low_ppm_list)
+colnames(ppm_df) <- c("ppm_diff", "theoretical_mz")
+
+
+ggplot(ppm_df, aes(x = theoretical_mz, y = ppm_diff)) +
+  geom_boxplot(fill = "steelblue") +
+  labs(title = "Estimated Precursor m/z: Boxplots of 10 Lowest PPM Differences (<50 ppm)",
+       x = "mz Value",
+       y = "PPM Difference") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+```
+
+For the **reported precursor m/z values**, the differences with theoretical m/z values are mainly **between 5 and 30 ppm**.  This corresponds to the **resolution of the quadrupole** in which the precurors were selected.
+For the **estiamted precursor m/z values**, the differences with theoretical m/z values are **below 3 ppm**. This corresponds to the **high-resolution Time-of-Flight** measurements of these precursor m/z values.
+There are only 20 boxplots. This might be because certain known compounds had exactly identical theoretical m/z value. We will check this below: 
+
+```{r}
+names(low_ppm_list)
+unique(names(low_ppm_list))
+length(unique(ppm_df$theoretical_mz))
+```
+
+Now we should find to which features in the qtof lc-ms experiment these low ppm differences with respect to known compounds, correspond.
+
+```{r}
+#create spectra data matrix from the  qtof XcmsExperiment object 
+spd <- spectraData(spectra(qtof))
+dim(spd)
+
+# Create theoretical_mz and ppm columns to store the matches with known compounds
+spd$theoretical_mz <- NA_real_
+spd$ppm <- NA_real_
+
+# Assign best match within 3 ppm
+matches <- sapply(epmz, function(p) {
+  ppm_diff <- abs(p - mz) / mz * 1e6
+  if (any(ppm_diff < 3, na.rm = TRUE)) {
+    i <- which.min(ppm_diff)
+    c(mz[i], ppm_diff[i])
+  } else {
+    c(NA, NA)
+  }
+})
+
+sum(!is.na(matches))
+# Store results in spd
+matches <- t(matches)
+spd$theoretical_mz <- matches[,1]
+spd$ppm <- matches[,2]
+
+```
+In the qtof experiment of S1 and S9 flaxseeds, there were 5242 spectra of which the precursor m/z corresponds to one of the 45 known compounds (ppm < 3).

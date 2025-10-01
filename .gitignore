@@ -9,3 +9,5 @@ chris_scanning*
 *.html
 *.pdf
 images/
+*_files/*
+.Rhistory
