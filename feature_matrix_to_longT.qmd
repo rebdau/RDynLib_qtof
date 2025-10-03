@@ -47,7 +47,7 @@ matrix_to_long <- function(feature_values) {
     pivot_longer(
       cols = -feature_id,
       names_to = "dataOrigin",
-      values_to = "value"
+      values_to = "intensity"
     )
 }
 
@@ -65,7 +65,7 @@ long_to_matrix <- function(long_df) {
   long_df %>%
     pivot_wider(
       names_from = dataOrigin,
-      values_from = value
+      values_from = intensity
     ) %>%
     as.data.frame() %>%
     tibble::column_to_rownames("feature_id")
