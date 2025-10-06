@@ -7,11 +7,12 @@ editor:
 ---
 ## Introdcution
 In this quarto document we filtered the QTOF neg of flax seed data. We
-create the precursorPurity and PrecursorIntensity columns. we remove MS1
-data, then we select the 10 % spectra with highest precursor purity, and
-from those spectra we select the 10 % spectra with highest precursor
-intensity and finally we select the spectrum with highest number of
-fragments
+create the precursorPurity and PrecursorIntensity columns. 
+We centroid the MS2 spectra.
+We select the 10 % spectra with highest precursor purity.
+We combine spectra to obtain one representative spectrum per feature, and finally keep for each spectrum the 100 peaks with highest intensities.
+
+In this document test different parameters and verify after each step the presence of known fragments in the fragmentation spectrum of a known compound, and the accuracy of the m/Z values.
 
 ## Data upload
 
