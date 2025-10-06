@@ -45,7 +45,7 @@ We next calculate the precursor purity, by calling the
 `precursorPurity()` function from the spectra package, for each MS2
 spectrum as well as the precursor intensity (since that is not provided
 in the original mzML files).
-
+### Function
 ```{r}
 precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
    # if (is.unsorted(rtime(x)))
@@ -81,6 +81,7 @@ precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
 
 ```
 
+### Calculation
 ```{r}
 precPurity <- precursorPurity(qtof_neg)
 spectraData(qtof_neg)$precursorIntensity <- NULL
@@ -90,12 +91,12 @@ qtof_neg$precursorIntensity <- precursorIntensity
 spectraData(qtof_neg)
 qtof@spectra <- qtof_neg
 ```
-### Save Spectra object with precursorPurity
+### Save XcmsExperiment object with precursorPurity
 
 ```{r}
 save(qtof, file = "qtof_precpur.RData")
 ```
-### Load Spectra object with precursorPurity
+### Load XcmsExperiment object with precursorPurity
 
 ```{r}
 load(file = "qtof_precpur.RData")
@@ -638,12 +639,167 @@ matchfragments <- analyze_spectrum(mz.data, formulas, masses, i)
 o <- order(abs(matchfragments$PPM))
 matchfragments[o,]
 ```
+
+### HWS = 2; k = 3
+
+```{r}
+feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 2L, k = 3L, threshold = 0.5)
+#Number of peaks in spectra for this feature with DDA1, DDA2, and DDA3, after centroiding:
+feature_spectra_FT10698_dda1 <- feature_spectra_centro[f == "FT10698 | DDA1",]
+feature_spectra_FT10698_dda2 <- feature_spectra_centro[f == "FT10698 | DDA2",]
+feature_spectra_FT10698_dda3 <- feature_spectra_centro[f == "FT10698 | DDA3",]
+
+
+dim(peaksData(feature_spectra_FT10698_dda1)[[1]])[1]
+counts <- sapply(peaksData(feature_spectra_FT10698_dda1), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+dim(peaksData(feature_spectra_FT10698_dda1)[[1]])[1]
+counts <- sapply(peaksData(feature_spectra_FT10698_dda2), function(x) {
+  dim(x)[1]
+})
+summary(counts)
+
+dim(peaksData(feature_spectra_FT10698_dda1)[[1]])[1]
+counts <- sapply(peaksData(feature_spectra_FT10698_dda3), function(x) {
+  dim(x)[1]
+})
+summary(counts)
+
+#Around 100 peaks after centroiding
+```
+About 200 peaks per spectrum with HWS=2, k=4
+
+
+```{r}
+# 1. Extract spectra info
+filenames <- feature_spectra_centro$dataOrigin
+dda <- stringr::str_extract(filenames, "DDA[0-9]")
+
+spectra_df <- as.data.frame(spectraData(feature_spectra_centro)) %>%
+  mutate(
+    index = row_number(),
+    f = paste(feature_id, "|", dda)  # same format as "FT10698 | DDA3"
+  )
+
+# 2. Identify spectra for FT10698 | DDA3
+which_f <- which(spectra_df$f == "FT10698 | DDA3")
+
+# 3. Run analysis only on these spectra
+all_results <- do.call(rbind, lapply(seq_along(which_f), function(j) {
+  spec_index <- which_f[j]
+  mz.data <- peaksData(feature_spectra_centro)[[spec_index]][,1]  # first column = m/z
+  analyze_spectrum(mz.data, formulas, masses, j)
+}))
+
+# 4. Filter matches with ppm < 5
+filtered_results <- subset(all_results, abs(PPM) < 5)
+
+# 5. Print tables
+if (nrow(filtered_results) == 0) {
+  cat("No matches within 5 ppm found for FT10698 | DDA3\n")
+} else {
+  cat("\nMatches per spectrum (spectrum index -> # matches):\n")
+  print(table(filtered_results$Spectrum))
+  
+  cat("\nSpectra count by number of matches (how many spectra had N matches):\n")
+  print(table(table(filtered_results$Spectrum)))
+}
+```
+
+
+```{r}
+
+# Loop over spectra objects
+for (set_name in names(feature_spectra_FT10698)) {
+  cat("\n==== Results for", set_name, "====\n")
+  
+  spectra <- feature_spectra_FT10698[[set_name]]
+  
+  # Run across all spectra in this feature set
+  all_results <- do.call(rbind, lapply(seq_along(spectra), function(i) {
+    mz.data <- peaksData(spectra)[[i]][,1]  # first column = m/z
+    analyze_spectrum(mz.data, formulas, masses, i)
+  }))
+  
+  # Filter only ppm < 5
+  filtered_results <- subset(all_results, abs(PPM) < 5)
+  
+  # Table 1: matches per spectrum
+  cat("\nTable: Matches per spectrum\n")
+  print(table(filtered_results$Spectrum))
+  
+  # Table 2: how many spectra have N matches
+  cat("\nTable: Spectra count by number of matches\n")
+  print(table(table(filtered_results$Spectrum)))
+}
+```
+
+Print the peaks data for the example feature "FT10698_dda3" after centroiding with two different halfwindowSize settings
+
+```{r}
+# Run pickPeaks with two halfWindowSizes
+spec_centro_hw2k2 <- Spectra::pickPeaks(feature_spectra,
+                             halfWindowSize = 2L, k = 2L, threshold = 0.5)
+spec_centro_hw3k3 <- Spectra::pickPeaks(feature_spectra,
+                             halfWindowSize = 3L, k = 3L, threshold = 0.5)
+spec_centro_hw5k5 <- Spectra::pickPeaks(feature_spectra,
+                             halfWindowSize = 5L, k = 5L, threshold = 0.5)
+
+# 1. Compare number of peaks per spectrum
+summary(sapply(peaksData(spec_centro_hw2k2), nrow))
+summary(sapply(peaksData(spec_centro_hw3k3), nrow))
+summary(sapply(peaksData(spec_centro_hw5k5), nrow))
+
+```
+
+```{r}
+feature_spectra_FT10698_dda3 <- spec_centro_hw2k2[f == "FT10698 | DDA3",]
+spectraData(feature_spectra_FT10698_dda3[4])$dataOrigin
+spectraData(feature_spectra_FT10698_dda3[4])$scanIndex
+peaksData(feature_spectra_FT10698_dda3)[[4]]
+
+mz.data <- peaksData(feature_spectra_FT10698_dda3)[[4]][,1]  # first column = m/z
+matchfragments <- analyze_spectrum(mz.data, formulas, masses, i)
+  
+o <- order(abs(matchfragments$PPM))
+matchfragments[o,]
+```
+
+```{r}
+feature_spectra_FT10698_dda3 <- spec_centro_hw3k3[f == "FT10698 | DDA3",]
+spectraData(feature_spectra_FT10698_dda3[4])$dataOrigin
+spectraData(feature_spectra_FT10698_dda3[4])$scanIndex
+peaksData(feature_spectra_FT10698_dda3)[[4]]
+
+mz.data <- peaksData(feature_spectra_FT10698_dda3)[[4]][,1]  # first column = m/z
+matchfragments <- analyze_spectrum(mz.data, formulas, masses, i)
+  
+o <- order(abs(matchfragments$PPM))
+matchfragments[o,]
+```
+
+
+```{r}
+feature_spectra_FT10698_dda3 <- spec_centro_hw5k5[f == "FT10698 | DDA3",]
+spectraData(feature_spectra_FT10698_dda3[4])$dataOrigin
+spectraData(feature_spectra_FT10698_dda3[4])$scanIndex
+peaksData(feature_spectra_FT10698_dda3)[[4]]
+
+mz.data <- peaksData(feature_spectra_FT10698_dda3)[[4]][,1]  # first column = m/z
+matchfragments <- analyze_spectrum(mz.data, formulas, masses, i)
+  
+o <- order(abs(matchfragments$PPM))
+matchfragments[o,]
+```
 ### Conclusion
 The median number of peaks per spectrum is 144 for `(halfWindowSize = 2L, k = 2L)`, 102 for `(halfWindowSize = 3L, k = 3L)`, and 65 for `(halfWindowSize = 5L, k = 5L)`.
 
 Most matches are found in **spectra from FT10698, with collision energy  DDA3**:
-The the maximum numb of matches with known fragments found in spectra for that feature and collision energy, was 8.
-The number of spectra with 8 matches was 15 for `(halfWindowSize = 2L, k = 2L)`, 12 for `(halfWindowSize = 3L, k = 3L)`, 7 for `(halfWindowSize = 5L, k = 5L)`.
+The  maximum number of matches with known fragments found in spectra for that feature and collision energy, was 8.
+The number of spectra with 8 matches was 15 for `(halfWindowSize = 2L, k = 2L)`, 12 for `(halfWindowSize = 2L, k = 3L)` or `(halfWindowSize = 3L, k = 3L)`, 7 for `(halfWindowSize = 5L, k = 5L)`.
 The number of spectra with >= 7 matches was 31 for `(halfWindowSize = 2L, k = 2L)`, 29 for `(halfWindowSize = 3L, k = 3L)`, and 26 for `(halfWindowSize = 5L, k = 5L)`.
 
 So, centroiding with `(halfWindowSize = 2L, k = 2L)` results in the highest number of high quality spectra.
@@ -689,7 +845,7 @@ Evaluate based on number of matches with known peaks.
 
 ```{r}
 # extract the spectra data as a dataframe
-filenames <- feature_spectra$dataOrigin
+filenames <- feature_spectra_centro$dataOrigin
 dda <- str_extract(filenames, "DDA[0-9]")
 
 
@@ -1071,13 +1227,13 @@ purity_df <- as.data.frame(spectraData(feature_spectra_centro)) %>%
     f = paste(feature_id, "|", dda) 
   )
 
-
+# 10% lowest
 keep_idx <- purity_df %>%
   group_by(f) %>%
   arrange(precursorPurity) %>%
   mutate(
     n_rows = n(),
-    cutoff = ceiling(n_rows * 0.20),   # 20% lowest
+    cutoff = ceiling(n_rows * 0.10),   
     row_number = row_number()
   ) %>%
   filter(row_number > cutoff) %>%
@@ -1099,8 +1255,8 @@ hist(counts)
 create a single spectrum for each feature per collision energy, keeping
 only fragments that are present in minimum `minprop` of spectra.
 We define that peaks need to be present in at least two different spectra, otherwise they are considered noise.
-In order to set the value of `minprop` so that it represents at least two spectra,
-we first need to know how many spectra each group counts.
+peaks = "intersect": keep only peaks in the resulting peak matrix that are present in ⁠>= minProp⁠ proportion of input spectra.
+In order to set the value of `minprop` so that it represents at least two spectra, we first need to know how many spectra each group counts.
 
 ### Count number of spectra per feature-DDA group
 ```{r}
@@ -1119,7 +1275,102 @@ hist(sapply(groups, length), breaks = 20)
 
 ```
 Most groups have less than 10 spectra. 
-Therefore, we need to set `minprop = 20`.
+Therefore, for the minimal proportion to be composed of minimum two peaks, we need to set `minprop = 20`.
+
+###check parameters Combine spectra
+```{r}
+# grouping by feature_id and collision energy
+# Rebuild the same f column for the spectra object
+filenames <- ms2_qtof_precpur$dataOrigin
+dda <- str_extract(filenames, "DDA[0-9]")
+
+f <- paste(ms2_qtof_precpur$feature_id, "|", dda)
+
+
+ms2_qtof_ftdda_20 <- combineSpectra(ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE, minProp = 0.2, intensityFun = mean, f = f, p = rep(1L, length(ms2_qtof_precpur)))
+
+#number of spectra:
+dim(spectraData(ms2_qtof_ftdda_20))[1]
+
+#number of peaks per spectrum
+counts <- sapply(peaksData(ms2_qtof_ftdda_20), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+
+ms2_qtof_ftdda_50 <- combineSpectra(ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE, minProp = 0.50, intensityFun = mean, f = f, p = rep(1L, length(ms2_qtof_precpur)))
+
+#number of spectra:
+dim(spectraData(ms2_qtof_ftdda_50))[1]
+
+#number of peaks per spectrum
+counts <- sapply(peaksData(ms2_qtof_ftdda_50), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+```
+The median number of peaks per spectrum went down from 142 to 56 with `minProp = 0.2`and 19 with `minProp = 0.5`.
+However, there were also spectra created with many more peaks. Maximum number of peaks increased from 1274 to 3693 with `minProp = 0.2`and 1402 with `minProp = 0.5`.
+
+### check FT10698 with collision energy  DDA3
+
+We first focus on the spectra of the known compound, and check if all peaks matching known fragments are retained.
+
+
+test the results on the previous feature
+
+```{r}
+#minprop 0.20
+# Rebuild the same f column for the spectra object
+filenames <- ms2_qtof_ftdda_20$dataOrigin
+dda <- str_extract(filenames, "DDA[0-9]")
+
+f <- paste(ms2_qtof_ftdda_20$feature_id, "|", dda)
+
+
+# 2. Identify spectra for FT10698 | DDA3
+which_f <- which(f == "FT10698 | DDA3")
+
+# 3. Run analysis only on these spectra
+all_results <- do.call(rbind, lapply(seq_along(which_f), function(j) {
+  spec_index <- which_f[j]
+  mz.data <- peaksData(ms2_qtof_ftdda_20)[[spec_index]][,1]  # first column = m/z
+  analyze_spectrum(mz.data, formulas, masses, j)
+}))
+
+# 4. Filter matches with ppm < 5
+filtered_results <- subset(all_results, abs(PPM) < 5)
+
+filtered_results
+
+#minprop 0.50
+# Rebuild the same f column for the spectra object
+filenames <- ms2_qtof_ftdda_50$dataOrigin
+dda <- str_extract(filenames, "DDA[0-9]")
+
+f <- paste(ms2_qtof_ftdda_50$feature_id, "|", dda)
+
+
+# 2. Identify spectra for FT10698 | DDA3
+which_f <- which(f == "FT10698 | DDA3")
+
+# 3. Run analysis only on these spectra
+all_results <- do.call(rbind, lapply(seq_along(which_f), function(j) {
+  spec_index <- which_f[j]
+  mz.data <- peaksData(ms2_qtof_ftdda_50)[[spec_index]][,1]  # first column = m/z
+  analyze_spectrum(mz.data, formulas, masses, j)
+}))
+
+# 4. Filter matches with ppm < 5
+filtered_results <- subset(all_results, abs(PPM) < 5)
+
+filtered_results
+```
+Both using with `minProp = 0.2`and `minProp = 0.5`, the resulting combined spectrum for feature FT10698 with collision energy  DDA3 contains still all 8 fragments matching known molecular formulas. The combined m/z values for these 8 fragments were exactly the same with the two settings.
+For some of these fragments the ppm difference slightly increased, for others the ppm difference decreased. In general, the difference between observed an theoretical mz was below 2 ppm (one exception at 2.4 ppm)
+Because with `minProp = 0.5` results overall in lower numbers of peaks per spectrum, we go on with  `minProp = 0.5`.
 
 ###Combine spectra
 ```{r}
@@ -1131,7 +1382,7 @@ dda <- str_extract(filenames, "DDA[0-9]")
 f <- paste(ms2_qtof_precpur$feature_id, "|", dda)
 
 
-ms2_qtof_ftdda <- combineSpectra(ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE, minProp = 0.2, intensityFun = mean, f = f, p = rep(1L, length(ms2_qtof)))
+ms2_qtof_ftdda <- combineSpectra(ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE, minProp = 0.5, intensityFun = mean, f = f, p = rep(1L, length(ms2_qtof_precpur)))
 
 #number of spectra:
 dim(spectraData(ms2_qtof_ftdda))[1]
@@ -1142,32 +1393,37 @@ counts <- sapply(peaksData(ms2_qtof_ftdda), function(x) {
 })
 
 summary(counts)
+
+
 ```
-The median number of peaks per spectrum went down from 142 to 67.
-However, there were also spectra created with many more peaks. Maximum number of peaks increased from 1274 to 3693.
 
-### check FT10698 with collision energy  DDA3
+## Grouping by feature_id for different collision energies
 
-We first focus on the spectra of the known compound, and check if all peaks matching known fragments are retained.
+```{r}
+# grouping by feature_id for different collision energies
+f = ms2_qtof_ftdda$feature_id
+ms2_qtof <- combineSpectra(ms2_qtof_ftdda, ppm = 5, peaks = "union",intensityFun = sum,weighted = TRUE, f = f, p = rep(1L, length(ms2_qtof_ftdda)))
 
+spectraData(ms2_qtof)$spectrum_type <- "merged_MSMS_all_energies"
 
-test the results on the previous feature
+```
+
+### check FT10698 merged spectrum for all collision energies
 
 ```{r}
 # Rebuild the same f column for the spectra object
-filenames <- ms2_qtof_ftdda$dataOrigin
-dda <- str_extract(filenames, "DDA[0-9]")
+filenames <- ms2_qtof$dataOrigin
 
-f <- paste(ms2_qtof_ftdda$feature_id, "|", dda)
+f <- ms2_qtof$feature_id
 
 
 # 2. Identify spectra for FT10698 | DDA3
-which_f <- which(f == "FT10698 | DDA3")
+which_f <- which(f == "FT10698")
 
 # 3. Run analysis only on these spectra
 all_results <- do.call(rbind, lapply(seq_along(which_f), function(j) {
   spec_index <- which_f[j]
-  mz.data <- peaksData(ms2_qtof_ftdda)[[spec_index]][,1]  # first column = m/z
+  mz.data <- peaksData(ms2_qtof)[[spec_index]][,1]  # first column = m/z
   analyze_spectrum(mz.data, formulas, masses, j)
 }))
 
@@ -1176,28 +1432,9 @@ filtered_results <- subset(all_results, abs(PPM) < 5)
 
 filtered_results
 ```
-The combined spectrum for feature FT10698 with collision energy  DDA3 contains still all 8 fragments matching known molecular formulas.
-For some of these fragments the ppm difference slightly increased, for others the ppm difference decreased. In general, the difference between observed an theoretical mz was below 2 ppm (one exception at 2.4 ppm)
+The combined spectrum for feature FT10698 (with collision energy  DDA3)all collision energies) contains still all 8 fragments matching known molecular formulas.
+The accuracy furhter increased, and the difference between observed an theoretical mz are now all below 2 ppm.
 
-## grouping by feature_id for different collision energies
-
-```{r}
-# grouping by feature_id for different collision energies
-f = ms2_qtof$feature_id
-ms2_qtof <- combineSpectra(ms2_qtof, ppm = 5, peaks = "union",intensityFun = sum,
-                                       f = f, p = rep(1L, length(ms2_qtof)))
-```
-
-```{r}
-spectraData(ms2_qtof)$spectrum_type <- "merged_MSMS_all_energies"
-```
-
-test the results on the previous feature to visualize the final selected
-peaks for this feature
-
-```{r}
-peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
-```
 
 ```{r}
 length(unique(unlist(ms2_qtof$feature_id)))
@@ -1207,6 +1444,56 @@ length(unique(spectraData(ms2_qtof)$feature_id))
 
 As a result we have `r length(unique(spectraData(ms2_qtof)$feature_id))`
 unique feature
+### check number of peaks per spectrum
+
+```{r}
+
+#number of peaks per spectrum
+counts <- sapply(peaksData(ms2_qtof), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+
+hist(counts, breaks = 100)
+hist(counts, breaks = 100, xlim = c(0,400))
+```
+
+```{r}
+
+#inspect some spectra that have more than 100 peaks
+peak_counts <- sapply(peaksData(ms2_qtof), nrow)
+over100 <- which(peak_counts > 100)
+idx <- over100[1]
+peaksData(ms2_qtof)[[idx]]
+spec <- peaksData(ms2_qtof)[[idx]]
+o <- order(spec[, 2], decreasing = TRUE)
+spec[o,][1:50,]
+
+
+```
+
+## Keep 100 peaks with highest intensity
+
+```{r}
+# Keep only the 100 peaks with the highest intensity
+top100 <- function(x, ...) {
+    # If fewer than 100 peaks, keep them all
+    if (length(x) <= 100) {
+        rep(TRUE, length(x))
+    } else {
+        # Keep TRUE for the 100 highest intensities
+        rank(-x, ties.method = "first") <= 100
+    }
+}
+
+# Apply the filter
+ms2_qtof <- filterIntensity(ms2_qtof, intensity = top100)
+peak_counts <- sapply(peaksData(ms2_qtof), nrow)
+summary(peak_counts)
+```
+
+
 
 Now we save the object
 
