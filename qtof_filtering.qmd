@@ -146,8 +146,9 @@ length(ms2_mult)
 
 There is `r length(ms2_mult)` duplicated assignment.
 
-In case of the length of ms2_mult not null, this file contains an
-algorithm that remove the duplication
+In case of the length of `ms2_mult` not null, this file
+[Resolve_multiple_assignment.R](https://github.com/rebdau/RDynLib_qtof/blob/ahlam/Resolve_multiple_assignment.R)
+contains an algorithm that remove the duplicated assignments
 
 ## Precursor purity
 
