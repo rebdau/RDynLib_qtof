@@ -5,20 +5,24 @@ editor:
   markdown: 
     wrap: 72
 ---
-
+## Introdcution
 In this quarto document we filtered the QTOF neg of flax seed data. We
-create the precursorPurity and PrecursorIntensity columns. we remove MS1
-data, then we select the 10 % spectra with highest precursor purity, and
-from those spectra we select the 10 % spectra with highest precursor
-intensity and finally we select the spectrum with highest number of
-fragments
+create the precursorPurity and PrecursorIntensity columns. 
+We centroid the MS2 spectra.
+We select the 10 % spectra with highest precursor purity.
+We combine spectra to obtain one representative spectrum per feature, and finally keep for each spectrum the 100 peaks with highest intensities.
 
-```{r}
+## Data upload
+
+```{r, echo = FALSE}
 library(Spectra)
 library(xcms)
 library(MsExperiment)
 library(S4Vectors)
 library(BiocParallel)
+library(Rdisop)
+library(stringr)
+library(dplyr)
 register(SerialParam())
 
 pth <- getwd()
@@ -34,11 +38,13 @@ load(file.path(pth, "data/qtof.RData"))
 qtof_neg <- spectra(qtof)
 ```
 
+##Calculate Precursor purity
+
 We next calculate the precursor purity, by calling the
 `precursorPurity()` function from the spectra package, for each MS2
 spectrum as well as the precursor intensity (since that is not provided
 in the original mzML files).
-
+### Function
 ```{r}
 precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
    # if (is.unsorted(rtime(x)))
@@ -74,6 +80,7 @@ precursorPurity <- function(x, tolerance = 0.3, ppm = 10) {
 
 ```
 
+### Calculation
 ```{r}
 precPurity <- precursorPurity(qtof_neg)
 spectraData(qtof_neg)$precursorIntensity <- NULL
@@ -81,56 +88,41 @@ precursorIntensity <- estimatePrecursorIntensity(qtof_neg, tolerance = 0.3, ppm 
 qtof_neg$precursorPurity <- precPurity
 qtof_neg$precursorIntensity <- precursorIntensity
 spectraData(qtof_neg)
+qtof@spectra <- qtof_neg
+```
+### Save XcmsExperiment object with precursorPurity
+
+```{r}
+save(qtof, file = "qtof_precpur.RData")
+```
+### Load XcmsExperiment object with precursorPurity
+
+```{r}
+load(file = "qtof_precpur.RData")
 ```
 
+## Associate MS2 spectra to features
 We next extract all MS2 spectra that can be associated to the MS1
 feature:
 
 ```{r}
-qtof@spectra <- qtof_neg
+
 feature_spectra <- featureSpectra(dropFilledChromPeaks(qtof), msLevel = 2, skipFilled = TRUE)
 spectraData(feature_spectra)
 ```
 
-\
-Before centroiding:
+
+##Centroiding the MS2 data
 
 ```{r}
-peaksData(feature_spectra)[[1]]
-```
-
-Print the peaks data for the example feature "FT17578" before
-centroiding
-
-```{r}
-peaksData(feature_spectra)[spectraData(feature_spectra)$feature_id == "FT17578", ][[1]]
-```
-
-Centroiding the MS2 data
-
-```{r}
-feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 5L, k = 1L)
-```
-
-After centroiding
-
-```{r}
-peaksData(feature_spectra_centro)[[1]]
-```
-
-Print the peaks data for the example feature "FT17578" after centroiding
-
-```{r}
-peaksData(feature_spectra_centro)[spectraData(feature_spectra_centro)$feature_id == "FT17578", ][[1]]
+feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 2L, k = 2L, threshold = 0.5)
 
 ```
-
-we verify if an MS2 Spectra is linked to more than one feature
+## Verify if MS2 Spectra are linked to more than one feature
 
 ```{r}
 scanIndex.per.ori <- split(feature_spectra_centro$scanIndex, feature_spectra_centro$dataOrigin)
-lapply(scanIndex.per.ori, function(x) any(duplicated(x)))
-lapply(scanIndex.per.ori, function(x) x[duplicated(x)])
+
 
 ```
 
@@ -143,166 +135,90 @@ length(ms2_mult)
 
 There is `r length(ms2_mult)` duplicated assignment
 
-# In case of duplicated assignments: Resolving multiple assignments of MS2 spectra to features
-
-We next evaluate the cases above to reduce/remove the multiple
-assignments and keep only a single MS2-feature association. First, we
-select the duplicated MS2 spectra by identifying those with the same
-*dataOrigin* and *acquisitionNum* but different *feature_id* to detect
-duplicates assigned to multiple features. From these duplicated MS2
-spectra, we then check first (*case A*) if a feature has unique MS2
-spectra elsewhere. If that is the case any ambiguous assignment is
-removed and only the unambiguous mappings are kept for the feature.
-Subsequently, the assignments are checked again and if there are still
-duplicated assignments the distance of the MS2 to the respective
-features is evaluated (*case B*): we keep the top 10% MS2-feature
-assignments. All other assignments are dropped for the respective
-feature.
-
-```{r}
-filter_unique_MS2 <- function(ms2, threshold = 0.002) {
-
-  sp <- spectraData(ms2)
-  #'group by dataOrigin and scanIndex to identify
-  #'duplicated assignments in each dataOrigin
-  sp$ms2_id <- paste0(sp$dataOrigin, "_", sp$scanIndex)
-  sp$feature_id <- as.character(sp$feature_id)
-  sp$ambiguous <- vector("list", nrow(sp))
-
-  # Find duplicated MS2
-  ms2_table <- table(sp$ms2_id)
-  duplicated_ms2 <- names(ms2_table)[ms2_table > 1]
-  # keep unique MS2 assignments directly
-  keep_rows <- which(!sp$ms2_id %in% duplicated_ms2)  
-
-  if (length(duplicated_ms2) > 0) {
-    # Get indices of duplicated MS2
-    dup_idx <- which(sp$ms2_id %in% duplicated_ms2)
-
-    # Split by ms2_id
-    dup_groups <- split(dup_idx, sp$ms2_id[dup_idx])
-
-    for (ms2_name in names(dup_groups)) {
-      idx <- dup_groups[[ms2_name]]
-      feature_ids <- sp$feature_id[idx]
-
-      ms2_mz <- precursorMz(ms2)[idx[1]]
-      ms2_rt <- rtime(ms2)[idx[1]]
-
-      mz_features <- sp$feature_mzmed[idx]
-      rt_features <- sp$feature_rtmed[idx]
-
-      # m/z filter
-      valid <- feature_ids[abs(ms2_mz - mz_features) <= threshold]
-
-      if (length(valid) == 0) {
-        # Keep first row, all features in ambiguous
-        keep_row <- idx[1]
-        sp$ambiguous[keep_row] <- list(feature_ids)
-        keep_rows <- c(keep_rows, keep_row)
-        next
-      }
-
-      # pick closest by RT if multiple
-      if (length(valid) > 1) {
-        rt_diff <- abs(ms2_rt - rt_features[match(valid, feature_ids)])
-        keep_feat <- valid[which.min(rt_diff)]
-      } else {
-        keep_feat <- valid
-      }
-
-      # Keep only row corresponding to selected feature
-      keep_row <- idx[which(feature_ids == keep_feat)[1]]
-      keep_rows <- c(keep_rows, keep_row)
-
-      # Store all other original features as ambiguous
-      sp$ambiguous[keep_row] <- list(setdiff(feature_ids, keep_feat))
-    }
-  }
-
-  ms2_filtered <- ms2[keep_rows, ]
-  sp_final <- spectraData(ms2_filtered)
-  sp_final$ambiguous <- sp$ambiguous[keep_rows]
-  spectraData(ms2_filtered) <- sp_final
-
-  ms2_filtered
-}
-
-
-
-
-
-qtof_filtered <- filter_unique_MS2(feature_spectra_centro, threshold = 0.002)
-```
-
-Removing the 10% with lowest purity
+## Precursor purity
+### Removing a fraction of the spectra based on precursor purity
+Grouping by feature_id and collision energy
+Removing per group the 10% spectra with lowest precursor purity.
 
 ```{r}
 # extract the spectra data as a dataframe
+library(dplyr)
+filenames <- feature_spectra$dataOrigin
+dda <- str_extract(filenames, "DDA[0-9]")
+
+
+
 purity_df <- as.data.frame(spectraData(feature_spectra_centro)) %>%
   mutate(
     index = row_number(),
-    f = paste(feature_id, "|", collisionEnergy)  
+    f = paste(feature_id, "|", dda) 
   )
 
-
+# 10% lowest
 keep_idx <- purity_df %>%
   group_by(f) %>%
   arrange(precursorPurity) %>%
   mutate(
     n_rows = n(),
-    cutoff = ceiling(n_rows * 0.10),   # 10% lowest
+    cutoff = ceiling(n_rows * 0.10),   
     row_number = row_number()
   ) %>%
   filter(row_number > cutoff) %>%
   pull(index)
+ms2_qtof_precpur <- feature_spectra_centro[keep_idx]
 
+#number of spectra:
+dim(spectraData(ms2_qtof_precpur))[1]
 
-ms2_qtof <- feature_spectra_centro[keep_idx]
-
+#number of peaks per spectrum:
+counts <- sapply(peaksData(ms2_qtof_precpur), function(x) {
+  dim(x)[1]
+})
+summary(counts)
+hist(counts)
 ```
 
-test the results on the previous feature
-
-```{r}
-peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
-```
-
+## Merge spectra within  feature_id - collision energy groups
 create a single spectrum for each feature per collision energy, keeping
-only fragments that are present in 50% of spectra
+only fragments that are present in minimum `minprop` of spectra.
+We define that peaks need to be present in at least 50% of the spectra, otherwise they are considered noise.
 
 ```{r}
 # grouping by feature_id and collision energy
-f <- paste(ms2_qtof$feature_id, "|", ms2_qtof$collisionEnergy)
-ms2_qtof <- combineSpectra(ms2_qtof, ppm = 5, peaks = "intersect", minProp = 0.5, 
-    intensityFun = max, f = f, p = rep(1L, length(ms2_qtof)))
+# Rebuild the same f column for the spectra object
+filenames <- ms2_qtof_precpur$dataOrigin
+dda <- str_extract(filenames, "DDA[0-9]")
+
+f <- paste(ms2_qtof_precpur$feature_id, "|", dda)
+
+
+ms2_qtof_ftdda <- combineSpectra(ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE, minProp = 0.5, intensityFun = mean, f = f, p = rep(1L, length(ms2_qtof_precpur)))
+
+#number of spectra:
+dim(spectraData(ms2_qtof_ftdda))[1]
+
+#number of peaks per spectrum
+counts <- sapply(peaksData(ms2_qtof_ftdda), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+
+
 ```
 
-test the results on the previous feature
-
-```{r}
-peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
-```
-
-grouping by feature_id for different collision energies
+## Grouping by feature_id for different collision energies
 
 ```{r}
 # grouping by feature_id for different collision energies
-f = ms2_qtof$feature_id
-ms2_qtof <- combineSpectra(ms2_qtof, ppm = 5, peaks = "union",intensityFun = sum,
-                                       f = f, p = rep(1L, length(ms2_qtof)))
-```
+f = ms2_qtof_ftdda$feature_id
+ms2_qtof <- combineSpectra(ms2_qtof_ftdda, ppm = 5, peaks = "union",intensityFun = sum,weighted = TRUE, f = f, p = rep(1L, length(ms2_qtof_ftdda)))
 
-```{r}
 spectraData(ms2_qtof)$spectrum_type <- "merged_MSMS_all_energies"
+
 ```
 
-test the results on the previous feature to visualize the final selected
-peaks for this feature
 
-```{r}
-peaksData(ms2_qtof)[spectraData(ms2_qtof)$feature_id == "FT17578", ][[1]]
-```
 
 ```{r}
 length(unique(unlist(ms2_qtof$feature_id)))
@@ -312,6 +228,44 @@ length(unique(spectraData(ms2_qtof)$feature_id))
 
 As a result we have `r length(unique(spectraData(ms2_qtof)$feature_id))`
 unique feature
+### check number of peaks per spectrum
+
+```{r}
+
+#number of peaks per spectrum
+counts <- sapply(peaksData(ms2_qtof), function(x) {
+  dim(x)[1]
+})
+
+summary(counts)
+
+hist(counts, breaks = 100)
+hist(counts, breaks = 100, xlim = c(0,400))
+```
+
+
+
+## Keep 100 peaks with highest intensity
+
+```{r}
+# Keep only the 100 peaks with the highest intensity
+top100 <- function(x, ...) {
+    # If fewer than 100 peaks, keep them all
+    if (length(x) <= 100) {
+        rep(TRUE, length(x))
+    } else {
+        # Keep TRUE for the 100 highest intensities
+        rank(-x, ties.method = "first") <= 100
+    }
+}
+
+# Apply the filter
+ms2_qtof <- filterIntensity(ms2_qtof, intensity = top100)
+peak_counts <- sapply(peaksData(ms2_qtof), nrow)
+summary(peak_counts)
+```
+
+
 
 Now we save the object
 
