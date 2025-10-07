@@ -109,7 +109,7 @@ peaksData(feature_spectra)[spectraData(feature_spectra)$feature_id == "FT17578",
 Centroiding the MS2 data
 
 ```{r}
-feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 5L, k = 1L)
+feature_spectra_centro <- Spectra::pickPeaks(feature_spectra, halfWindowSize = 5L, k = 1L,  weighted = TRUE)
 ```
 
 After centroiding
