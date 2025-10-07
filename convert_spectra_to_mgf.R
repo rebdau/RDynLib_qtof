@@ -1,5 +1,6 @@
 library(Spectra)
 library(MSnbase)
+
 pth <- getwd()
 pth
 load("data/ms2_qtof.RData")
@@ -9,7 +10,7 @@ sps <- ms2_qtof
 peaks_list <- peaksData(sps)
 meta_data <- spectraData(sps)
 
-mgf_file <- "qtof_filtered_sirius.mgf"
+mgf_file <- "data/qtof_filtered_sirius.mgf"
 con <- file(mgf_file, "w")
 
 for (i in seq_along(peaks_list)) {

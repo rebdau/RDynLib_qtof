@@ -772,6 +772,30 @@ spectra(qtof)$precursorMz <- epmz
 save(qtof, file = "data/qtof.RData")
 ```
 
+## Feature matrix
+
+Now we will create the feature matrix of this data.
+
+```{r}
+load("data/qtof.RData")
+corrected_features <- featureDefinitions(qtof)
+#here we add a new column called featue in this format "MxTy" with:
+#x: mzmed and y: rtmed of each feature
+
+final_feature_matrix <- data.frame(
+ `rt(min)` = corrected_features$rtmed / 60,
+  mzmed = corrected_features$mzmed,
+  feature_name = paste0(
+    "M", round(corrected_features$mzmed, 0),
+    "T", round(corrected_features$rtmed, 0)
+  )
+)
+```
+
+```{r}
+head(final_feature_matrix)
+```
+
 ## Questions and answers
 
 -   What's next?\
