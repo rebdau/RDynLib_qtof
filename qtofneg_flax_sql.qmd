@@ -185,10 +185,10 @@ CREATE TABLE msms_spectrum (
   ionisation_energy REAL,
   low_mz REAL,
   high_mz REAL,
-  merged_scan INTEGER,
-  merged_result_scan_num INTEGER,
-  merged_result_start_scan_num INTEGER,
-  merged_result_end_scan_num INTEGER,
+  mergedScan INTEGER,
+  mergedResultScanNum INTEGER,
+  mergedResultStartScanNum INTEGER,
+  mergedResultEndScanNum INTEGER,
   injection_time REAL,
   filter_string TEXT,
   spectrum_id_original INTEGER,
@@ -208,11 +208,12 @@ CREATE TABLE msms_spectrum (
   smoothed INTEGER,
   instrument TEXT,
   instrument_type TEXT,
-  acquisition_num REAL,
-  prec_scan_num INTEGER,
+  acquisitionNum REAL,
+  precScanNum INTEGER,
   predicted REAL,
-  data_origin TEXT,
+  dataOrigin TEXT,
   splash TEXT,
+  original_id INTEGER,
   FOREIGN KEY (compound_id) REFERENCES ms_compound(compound_id)
 );
 ")
@@ -245,10 +246,10 @@ msms_df <- data.frame(
   ionisation_energy = getcol("ionisationEnergy"),
   low_mz = getcol("lowMZ"),
   high_mz = getcol("highMZ"),
-  merged_scan = getcol("mergedScan"),
-  merged_result_scan_num = getcol("mergedResultScanNum"),
-  merged_result_start_scan_num = getcol("mergedResultStartScanNum"),
-  merged_result_end_scan_num = getcol("mergedResultEndScanNum"),
+  mergedScan = getcol("mergedScan"),
+  mergedResultScanNum = getcol("mergedResultScanNum"),
+  mergedResultStartScanNum = getcol("mergedResultStartScanNum"),
+  mergedResultEndScanNum = getcol("mergedResultEndScanNum"),
   injection_time = getcol("injectionTime"),
   filter_string = getcol("filterString"),
   spectrum_id_original = getcol("spectrumId"),
@@ -268,10 +269,11 @@ msms_df <- data.frame(
   smoothed = getcol("smoothed"),
   instrument = getcol("instrument"),
   instrument_type = getcol("instrument_type"),
-  acquisition_num = getcol("acquisitionNum"),
-  prec_scan_num = getcol("precScanNum"),
+  acquisitionNum = getcol("acquisitionNum"),
+  precScanNum = getcol("precScanNum"),
   predicted = getcol("predicted"),
-  data_origin = getcol("dataOrigin"),
+  dataOrigin = getcol("dataOrigin"),
+  original_id = getcol("original_id"),
   stringsAsFactors = FALSE
 )
 msms_df$compound_id <- ms_compound_df$compound_id[match(sp$feature_id, ms_compound_df$node_name)]
@@ -292,7 +294,7 @@ numeric_cols <- c(
   "scan_window_lower_limit", "scan_window_upper_limit",
   "electron_beam_energy", "original_precursor_mz",
   "precursor_purity", "chrom_peak_rt", "chrom_peak_mz",
-  "rtime", "acquisition_num", "predicted"
+  "rtime", "acquisitionNum", "predicted"
 )
 msms_df[numeric_cols] <- lapply(msms_df[numeric_cols], as.numeric)
 
