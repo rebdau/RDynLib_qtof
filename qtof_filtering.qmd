@@ -226,6 +226,48 @@ summary(counts)
 
 ```
 
+## Keep 100 peaks with highest intensity
+
+```{r}
+# Keep only the 100 peaks with the highest intensity
+top100 <- function(x, ...) {
+    # If fewer than 100 peaks, keep them all
+    if (length(x) <= 100) {
+        rep(TRUE, length(x))
+    } else {
+        # Keep TRUE for the 100 highest intensities
+        rank(-x, ties.method = "first") <= 100
+    }
+}
+
+# Apply the filter
+ms2_qtof_sep <- filterIntensity(ms2_qtof_ftdda, intensity = top100)
+spectraData(ms2_qtof_sep)$spectrum_type <- "intersect_single_energy"
+peak_counts <- sapply(peaksData(ms2_qtof_sep), nrow)
+summary(peak_counts)
+```
+
+Summary and quantile of the peaks number in each spectrum
+
+```{r}
+peak_counts <- sapply(peaksData(ms2_qtof_sep), nrow)
+summary(peak_counts)
+quantile(peak_counts)
+
+```
+
+Number of spectra with just one peak
+
+```{r}
+peak_counts <- lengths(ms2_qtof_sep)
+num_one_peak_spectra <- sum(peak_counts == 1)
+num_one_peak_spectra
+```
+
+```{r}
+save(ms2_qtof_sep, file = file.path(pth, "data", "ms2_qtof_sep.RData"))
+```
+
 ## Grouping by feature_id for different collision energies
 
 ```{r}
@@ -274,15 +316,31 @@ top100 <- function(x, ...) {
 }
 
 # Apply the filter
-ms2_qtof <- filterIntensity(ms2_qtof, intensity = top100)
-peak_counts <- sapply(peaksData(ms2_qtof), nrow)
-summary(peak_counts)
+ms2_qtof_comb <- filterIntensity(ms2_qtof, intensity = top100)
+spectraData(ms2_qtof_comb)$spectrum_type <- "intersect_single_energy"
+
 ```
 
-Now we save the object
+Here we print the summary and the quantile of the peaks number
 
 ```{r}
-save(ms2_qtof, file = file.path(pth, "data", "ms2_qtof.RData"))
+peak_counts <- sapply(peaksData(ms2_qtof_comb), nrow)
+summary(peak_counts)
+quantile(peak_counts)
+```
+
+save the object
+
+```{r}
+save(ms2_qtof_comb, file = file.path(pth, "data", "ms2_qtof_Comb.RData"))
+```
+
+Here we save the global object that contains the qtof assembled and
+separated, distinguished by spectrum_type column
+
+```{r}
+qtof_flax_final <- c(ms2_qtof_sep, ms2_qtof_comb)
+save(qtof_flax_final, file = file.path(pth, "data", "qtof_flax_final.RData"))
 ```
 
 ## Session information
