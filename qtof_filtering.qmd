@@ -243,8 +243,6 @@ top100 <- function(x, ...) {
 # Apply the filter
 ms2_qtof_sep <- filterIntensity(ms2_qtof_ftdda, intensity = top100)
 spectraData(ms2_qtof_sep)$spectrum_type <- "intersect_single_energy"
-peak_counts <- sapply(peaksData(ms2_qtof_sep), nrow)
-summary(peak_counts)
 ```
 
 Summary and quantile of the peaks number in each spectrum
