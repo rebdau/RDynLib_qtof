@@ -38,7 +38,7 @@ con <- dbConnect(RSQLite::SQLite(), "data/QTOF_flax_neg.sqlite")
 ```
 
 ```{r}
-
+#new_exp_id <- max(dbReadTable(con, "experiment")$expid, na.rm = TRUE) + 1
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS experiment (
     expid INTEGER PRIMARY KEY AUTOINCREMENT,  -- auto-incrementing ID
@@ -112,24 +112,38 @@ head(sp_data[, c("feature_id", "feature_rtmed", "feature_mzmed")])
 ```
 
 ```{r}
-n <- nrow(sp_data)
+cmp <- sp_data[, c("feature_id", "feature_rtmed", "feature_mzmed")] |>
+  as.data.frame() |>
+  unique()
+
+n <- nrow(cmp)
 
 # Get the last compound_id already in the table
 last_id <- dbGetQuery(con, "SELECT compound_id FROM ms_compound ORDER BY compound_id DESC LIMIT 1;")$compound_id
 
 #Determine the next numeric index
-start_num <- if(length(last_id) == 0) 1 else as.numeric(sub("DYL", "", last_id)) + 1
+#start_num <- if(length(last_id) == 0) 1 else as.numeric(sub("DYL", "", last_id)) + 1
 
 #  Generate the new compound_id vector
-compound_ids <- sprintf("DYL%07d", start_num:(start_num + n - 1))
+#compound_ids <- sprintf("DYL%07d", start_num:(start_num + n - 1))
 
+# Retrieve all existing compound_id values from the table
+compound_ids_raw <- dbReadTable(con, "ms_compound")$compound_id
+
+# Convert to numeric to extract the maximum 
+compound_ids <- suppressWarnings(as.numeric(as.character(compound_ids_raw)))
+compound_ids <- compound_ids[!is.na(compound_ids)] 
+# Find the next compound_id: 1 if empty, otherwise max + 1
+start_id <- if (length(compound_ids) == 0) 1 else max(compound_ids) + 1
+
+last_expid <- dbReadTable(con, "experiment")$expid
 # Create the data frame with compound IDs
 ms_compound_df <- data.frame(
-  compound_id = compound_ids,
+  compound_id = as.character(seq(start_id, length.out = n)),
   expid = rep(last_expid, n),
-  node_name = sp_data$feature_id,
-  retention_time = sp_data$feature_rtmed,
-  mass_measured = sp_data$feature_mzmed,
+  node_name = cmp$feature_id,
+  retention_time = cmp$feature_rtmed,
+  mass_measured = cmp$feature_mzmed,
   name = rep(NA_character_, n),
   formula = rep(NA_character_, n),
   exactmass = rep(NA_real_, n),
@@ -278,8 +292,7 @@ msms_df <- data.frame(
 )
 msms_df$compound_id <- ms_compound_df$compound_id[match(sp$feature_id, ms_compound_df$node_name)]
 
-# Convert collision_energy to character (NA_character_ si vide)
-msms_df$collision_energy <- as.character(msms_df$collision_energy)
+# Convert collision_energy to character (NA_character_ si vide msms_df$collision_energy <- as.character(msms_df$collision_energy)
 
 # Les autres colonnes numériques restent numériques
 msms_df$centroided <- as.integer(msms_df$centroided)
@@ -452,5 +465,9 @@ cdb
 Convert the compoundDb to a spectra object
 ```{r}
 sp <- Spectra(cdb)
+```
+
+```{r}
+spectraData(sp)
 ```
 
