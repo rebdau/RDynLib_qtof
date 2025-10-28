@@ -468,6 +468,6 @@ sp <- Spectra(cdb)
 ```
 
 ```{r}
-spectraData(sp)
+spectraData(sp, columns = c("msLevel", "compound_id", "node_name", "rtime"))
 ```
 
