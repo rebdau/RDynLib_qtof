@@ -383,6 +383,12 @@ dbExecute(con, "
 ```
 
 Create featue_matrix table
+
+```{r}
+dbExecute(con, "DROP TABLE IF EXISTS feature_matrix;")
+```
+
+
 ```{r}
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS feature_matrix (
@@ -390,7 +396,6 @@ dbExecute(con, "
     dataOrigin TEXT,
     Value REAL,
     expid INTEGER,
-    PRIMARY KEY (node_name, dataOrigin, expid),
     FOREIGN KEY (expid) REFERENCES experiment(expid)
   );
 ")
