@@ -315,7 +315,6 @@ ms2_qtof_sep <- filterIntensity(ms2_qtof_ftdda, intensity = top100)
 
 spectraData(ms2_qtof_sep)$spectrum_type <- "intersect_single_energy"
 
-ms2_qtof_sep$spectrum_type <- "intersect_single_energy"
 
 ```
 
@@ -334,6 +333,7 @@ sum(lengths(ms2_qtof_sep) == 1)
 
 ```{r}
 save(ms2_qtof_sep, file = file.path(pth, "data", "ms2_qtof_sep.RData"))
+
 ```
 
 ## Grouping by feature_id for different collision energies
@@ -345,7 +345,7 @@ ms2_qtof <- combineSpectra(ms2_qtof_ftdda, ppm = 5, peaks = "union",
                            intensityFun = sum,weighted = TRUE, f = f,
                            p = rep(1L, length(ms2_qtof_ftdda)))
 
-ms2_qtof$spectrum_type <- "merged_MSMS_all_energies"
+
 ```
 
 ```{r}
@@ -388,7 +388,7 @@ top100 <- function(x, ...) {
 
 # Apply the filter
 ms2_qtof_comb <- filterIntensity(ms2_qtof, intensity = top100)
-spectraData(ms2_qtof_comb)$spectrum_type <- "intersect_single_energy"
+spectraData(ms2_qtof_comb)$spectrum_type <- "merged_MSMS_all_energies"
 
 ```
 
@@ -414,37 +414,6 @@ qtof_flax_final <- c(ms2_qtof_sep, ms2_qtof_comb)
 save(qtof_flax_final, file = file.path(pth, "data", "qtof_flax_final.RData"))
 ```
 
-## Converting the MS data to *low m/z resolution*
-
-We next round the *m/z* values of the fragment peaks to the next integer
-enabling us to evaluate the number of peaks that would be considered during
-similarity calculation with the FTMS data.
-
-```{r}
-round_mz <- function(x, ...) {
-    x[, "mz"] <- floor(x[, "mz"] + 0.5)
-    x
-}
-
-ms2_qtof_sepr <- addProcessing(ms2_qtof_sep, round_mz)
-```
-
-The number of peaks per spectrum with a **unique** m/z (after rounding) are
-shown below.
-
-```{r}
-n_pks <- vapply(peaksData(ms2_qtof_sepr),
-                function(z) length(unique(z[, "mz"])), NA_integer_)
-quantile(lengths(ms2_qtof_sep))
-quantile(n_pks)
-```
-
-The total number of peaks did not change much. The number of spectra with a
-single peak are reported below:
-
-```{r}
-sum(n_pks == 1)
-```
 
 
 ## Session information
