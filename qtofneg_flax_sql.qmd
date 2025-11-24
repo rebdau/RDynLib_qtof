@@ -185,6 +185,7 @@ CREATE TABLE msms_spectrum (
   compound_id TEXT,
   ms_level INTEGER,
   polarity INTEGER,
+  spectrum_type TEXT,
   precursor_mz REAL,
   precursorIntensity REAL,
   precursorCharge INTEGER,
@@ -246,6 +247,7 @@ msms_df <- data.frame(
   compound_id = NA,
   ms_level = getcol("msLevel"),
   polarity = getcol("polarity"),
+  spectrum_type = getcol("spectrum_type"),
   precursor_mz = getcol("precursorMz"),
   precursorIntensity = getcol("precursorIntensity"),
   precursorCharge = getcol("precursorCharge"),  
@@ -455,7 +457,7 @@ sp <- Spectra(cdb)
 ```
 
 ```{r}
-spectraData(sp, columns = c("msLevel", "compound_id", "nodename", "rtime", "retention_time"))
+spectraData(sp, columns = c("msLevel", "compound_id", "nodename", "rtime", "retention_time", "spectrum_type"))
 ```
 
 ```{r}
