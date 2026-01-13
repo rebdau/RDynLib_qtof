@@ -1,0 +1,78 @@
+---
+title: "Convert the feature matrix to a long format"
+format:
+  html:
+    toc: true
+    self-contained: true
+author: "Ahlam Mentag, Johannes Rainer"
+editor:
+  markdown:
+    wrap: 72
+---
+
+## Shiny Documents
+
+In this Quarto document we create two helper functions the first takes the 
+output from featureValues() function and transforms that data into the long 
+form and the second function takes the data as stored in the long form 
+and converts it back into a two-dimensional matrix.
+
+```{r}
+library(xcms)
+library(MsExperiment)
+library(Spectra)
+library(tidyr)
+library(dplyr)
+```
+
+```{r}
+pth <- getwd()
+pth
+```
+
+```{r}
+load("data/qtof.RData")
+```
+
+```{r}
+feature_Values <- featureValues(qtof)
+head(feature_Values)
+```
+This function convert the feature matrix output to a long table format
+```{r}
+matrix_to_long <- function(feature_values) {
+  feature_values %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("feature_id") %>%
+    pivot_longer(
+      cols = -feature_id,
+      names_to = "dataOrigin",
+      values_to = "intensity"
+    )
+}
+
+# Here we call the function
+long_format <- matrix_to_long(feature_Values)
+head(long_format, 10)
+nrow(long_format)
+```
+
+The function bellow takes the long form data and converts it back into
+a two-dimensional matrix. 
+
+```{r}
+long_to_matrix <- function(long_df) {
+  long_df %>%
+    pivot_wider(
+      names_from = dataOrigin,
+      values_from = intensity
+    ) %>%
+    as.data.frame() %>%
+    tibble::column_to_rownames("feature_id")
+}
+
+
+two_D_matrix_format <- long_to_matrix(long_format)
+head(two_D_matrix_format) 
+```
+
