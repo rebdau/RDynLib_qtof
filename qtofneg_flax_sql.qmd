@@ -4,13 +4,14 @@ format:
   html:
     toc: true
     self-contained: true
-author: "Ahlam Mentag, Johannes Rainer"
+author: "Ahlam Mentag, Rebecca Dauwe, Johannes Rainer"
 ---
 
 ## Shiny Documents
 
-This Quarto document represents the folowing steps to create a Sql database for
-Qtof Flax data
+This Quarto document outlines the workflow for creating a SQL database from 
+QTOF flax data. The dataset includes two types of spectra, identified by the
+spectrum_type column: "merged_MSMS_all_energies" and "intersect_single_energy".
 
 ```{r}
 library(Spectra)
@@ -28,15 +29,57 @@ pth <- getwd()
 pth
 ```
 
+# Input data and directory structure
+The working directory must be set to the root of the project. From this root directory, a subdirectory named `data/` is required. This directory contains **`Spectra` objects generated upstream** by the Quarto documents:
+
+- `qtof_filtering.qmd`
+
+The Project directory structure is as follows:
+
+root/
+├── qtof_filtering.qmd
+├── qtofneg_flax_sql.qmd
+└── data/
+    ├── ms2_qtof_Comb.RData
+    └── ms2_qtof_sep.RData
+    └── qtof_flax_final.RData
+    
+The following data files must be present:
+
+- **`data/ms2_qtof_sep.RData`**  
+  contains single spectrum for each feature per collision energy of 
+  the flax experiment.
+
+- **`data/ms2_qtof_Comb.RData`**  
+  Contains a `Spectra` after grouping by feature_id for different collision 
+  energies of the flax experiment.
+  
+- **`data/qtof_flax_final.RData`**
+  In this object we stored the both previous objects "ms2_qtof_sep.RData" and
+  "ms2_qtof_Comb.RData".
+  
+All file paths used in this document are **relative to the project root directory**.
+
+### Verify working directory
+
+```{r}
+# Verify working directory
+pth <- getwd()
+pth
+```
+
+##Here we load the qtof flax neg spectra object 
 ```{r}
 load("data/qtof_flax_final.RData")
 spectraData(qtof_flax_final)
 ```
 
+##Create an empty sql database 
 ```{r}
 con <- dbConnect(RSQLite::SQLite(), "data/QTOF_flax_neg.sqlite")
 ```
 
+##Create table experiment to store experiment metadata
 ```{r}
 #new_exp_id <- max(dbReadTable(con, "experiment")$expid, na.rm = TRUE) + 1
 dbExecute(con, "
@@ -61,6 +104,7 @@ dbExecute(con, "
 
 ```
 
+##Insert Experiment data to Experiment table
 ```{r}
 dbExecute(con, "
   INSERT INTO experiment 
@@ -71,12 +115,13 @@ dbExecute(con, "
 
 ```
 
+Here we Print the Experiment table after creation and insertion
 ```{r}
 dbGetQuery(con, "SELECT * FROM experiment;")
 
 ```
 
-Create table ms_compound
+##Create table ms_compound to store compounds information
 ```{r}
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS ms_compound (
@@ -105,12 +150,14 @@ dbExecute(con, "
 
 ```
 
+##Extract spectraData from the flax ftms negative object
 ```{r}
 sp_data <- spectraData(qtof_flax_final)
 head(sp_data[, c("feature_id", "feature_rtmed", "feature_mzmed")])
 
 ```
 
+Insert data to the compound table
 ```{r}
 cmp <- sp_data[, c("feature_id", "feature_rtmed", "feature_mzmed")] |>
   as.data.frame() |>
@@ -173,7 +220,7 @@ dbWriteTable(con, "ms_compound", ms_compound_df, append = TRUE, row.names = FALS
 dbGetQuery(con, "SELECT * FROM ms_compound LIMIT 10;")
 ```
 
-Create msms_spectrum table
+#Create msms_spectrum table
 ```{r}
 # Drop old table
 dbExecute(con, "DROP TABLE IF EXISTS msms_spectrum;")
@@ -237,7 +284,7 @@ CREATE TABLE msms_spectrum (
 
 ```
 
-
+## insert spectra data to the msms_spectrum table
 ```{r}
 sp <- spectraData(qtof_flax_final)
 
@@ -304,11 +351,12 @@ dbWriteTable(con, "msms_spectrum", msms_df, append = TRUE, row.names = FALSE)
 
 ```
 
+Verification
 ```{r}
 dbGetQuery(con, "SELECT * FROM msms_spectrum LIMIT 10;")
 ```
 
-Create msms_spectrum_peak
+#Create msms_spectrum_peak
 ```{r}
 dbExecute(con, "
   CREATE TABLE IF NOT EXISTS msms_spectrum_peak (
@@ -323,7 +371,7 @@ dbExecute(con, "
 
 ```
 
-
+##insert each individual peak in a single row
 ```{r}
 pd <- peaksData(qtof_flax_final)
 
@@ -366,7 +414,7 @@ dbExecute(con, "
 
 ```
 
-Create featue_matrix table
+#Create featue_matrix table
 
 ```{r}
 dbExecute(con, "DROP TABLE IF EXISTS feature_matrix;")
@@ -386,7 +434,7 @@ dbExecute(con, "
 
 ```
 
-Create the content of the feature matrix
+#Create the content of the feature matrix
 ```{r}
 load("data/qtof.RData")
 feature_Values <- featureValues(qtof)
@@ -432,34 +480,36 @@ dbWriteTable(con, "feature_matrix", long_format, append = TRUE, row.names = FALS
 dbGetQuery(con, "Select * from feature_matrix LIMIT 10")
 ```
 
-Create metadata table
+#Create metadata table
 ```{r}
 md <- make_metadata(source = "Flax QTOF neg", url = NA_character_,
                     source_version = "1.0.0", source_date = "2025-10-08")
 dbWriteTable(con, name = "metadata", md, row.names = FALSE)
 ```
 
-Here we print all the con tables
+#Here we print all the con tables
 ```{r}
 
 dbListTables(con)
 ```
 
-Convert the data to compDb object
+#Convert the data to compDb object
 ```{r}
 cdb <- CompDb(con)
 cdb
 ```
 
-Convert the compoundDb to a spectra object
+#Convert the compoundDb to a spectra object
 ```{r}
 sp <- Spectra(cdb)
 ```
 
+##print the spectraData of the resulting spectra object
 ```{r}
 spectraData(sp, columns = c("msLevel", "compound_id", "nodename", "rtime", "retention_time", "spectrum_type"))
 ```
 
+##print the spectraVariables of the resulting spectra object
 ```{r}
 spectraVariables(sp)
 ```
