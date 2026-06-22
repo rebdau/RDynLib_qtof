@@ -1,8 +1,12 @@
 ---
 title: "Selection of representative MS2 spectra per feature"
-format: html
-editor:
-  markdown:
+format:
+  html:
+    toc: true
+    self-contained: true
+author: "Ahlam Mentag, Rebecca Dauwe, Johannes Rainer"
+editor: 
+  markdown: 
     wrap: 72
 ---
 

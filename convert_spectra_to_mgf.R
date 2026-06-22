@@ -3,10 +3,10 @@ library(MSnbase)
 
 pth <- getwd()
 pth
-load("data/ms2_qtof.RData")
+load("data/ms2_qtof_Comb.RData")
 
 
-sps <- ms2_qtof
+sps <- ms2_qtof_comb
 peaks_list <- peaksData(sps)
 meta_data <- spectraData(sps)
 
