@@ -11,3 +11,4 @@ chris_scanning*
 images/
 *_files/*
 .Rhistory
+.RDataTmp
