@@ -43,19 +43,19 @@ dbfile <- here("data", "QTOF_flax_neg.sqlite")
 createSpectraSQLite(
     sps = qtof_flax_final,
     dbfile = dbfile,
-    date = "01/06/2015",
-    user = "ament",
-    machine = "qtof",
+    date = "11/06/2023",
+    user = "rebdau",
+    machine = "Synapt",
     mode = "neg",
-    tissue = "man3rf",
-    mstype = "FT",
-    column = "Waters_Sunfire_C18",
+    tissue = "seed_integument",
+    mstype = "QTof",
+    column = "Phenomenex_Kinetex_C18",
     buffera = "water_AA",
     bufferb = "ACN",
-    gradient_time = "65(95-95in2_to82at32_to76at60min__to0at65minat300_40gr) min",
+    gradient_time = "35(95-55in30_to55at35minat500_40gr) min",
     source = "ESI",
     species = "Linum usitatissimum",
-    ce = 35,
+    ce = "ramp",
     meta = "Linea_varieties_S1_S9"
 )
 ```

@@ -419,6 +419,51 @@ save(qtof_flax_final, file = file.path(pth, "data", "qtof_flax_final.RData"))
 ```
 
 
+```{r}
+library(Spectra)
+library(stringr)
+library(dplyr)
+
+sd <- spectraData(qtof_flax_final) |> as.data.frame()
+
+
+unique(sd$spectrum_type)
+
+# extract energy level (DDA1/DDA2/DDA3) from the file path
+sd$energy <- str_extract(sd$dataOrigin, "DDA[0-9]")
+
+## 1) MS2 spectra count PER ENERGY LEVEL, for spectrum_type == "intersect_single_energy"
+counts_single_energy <- sd %>%
+  filter(msLevel == 2, spectrum_type == "intersect_single_energy") %>%
+  count(energy, name = "n_ms2_spectra")
+
+counts_single_energy
+```
+
+```{r}
+## Total MS2 spectra where spectrum_type == "merged_MSMS_all_energies"
+n_merged_ms2 <- sd %>%
+  filter(msLevel == 2, spectrum_type == "merged_MSMS_all_energies") %>%
+  nrow()
+
+n_merged_ms2
+```
+```{r}
+counts_merged_total <- sd %>%
+  filter(msLevel == 2, spectrum_type == "merged_MSMS_all_energies") %>%
+  summarise(n_ms2_spectra = n())
+
+counts_merged_total
+
+
+counts_merged_by_energy <- sd %>%
+  filter(msLevel == 2, spectrum_type == "merged_MSMS_all_energies") %>%
+  count(energy, name = "n_ms2_spectra")
+
+counts_merged_by_energy
+```
+
+
 
 ## Session information
 
