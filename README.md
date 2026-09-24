@@ -10,8 +10,8 @@ Semi-automated generation of reference spectral libraries from QTOF data
 
 This folder contains the following files:
 
--   [centroiding.qmd](https://github.com/rebdau/RDynLib_qtof/blob/ahlam/centroiding.qmd):
-    First we convert the data from profile to centroided mode.
+-   [centroiding.qmd](centroiding.qmd): centroiding from RDynLib_ftms as 
+    template for centoriding MS/MS
 
 -   [qtof_preprocessing.qmd](qtof_preprocessing.qmd): where we load and
     analyse the data with the *xcms* package.
@@ -34,7 +34,7 @@ This folder contains the following files:
 
 **The execution order:**
 
-1\. *centroiding.qmd*
+1\. *centroiding.qmd* (optional)
 
 2\. *qtof_preprocessing.qmd*
 
