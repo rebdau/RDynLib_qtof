@@ -26,7 +26,8 @@ This folder contains the following files:
     the qtof data and we kept just one spectrum per feature and we save
     the resulting object as "qtof_filtered.RData".
 
--   
+-   [flax_qtneg_SQL.qmd](flax_qtneg_SQL.qmd) : in this file the sql database 
+    is created from the filtered spectra object
 
     [qtofneg_flax_sql.qmd](https://github.com/rebdau/RDynLib_qtof/blob/ahlam/qtofneg_flax_sql.qmd)
 
@@ -41,3 +42,5 @@ This folder contains the following files:
 3\. *qtof_filtering.qmd*
 
 4.  *qtof_precursormass_accuracy.qmd* is optional.
+
+5\. *flax_qtneg_SQL.qmd* 
