@@ -213,7 +213,6 @@ the 10% of spectra with the lowest precursor purity.
 
 ```{r}
 # extract the spectra data as a dataframe
-library(dplyr)
 filenames <- feature_spectra$dataOrigin
 dda <- str_extract(filenames, "DDA[0-9]")
 

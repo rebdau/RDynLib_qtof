@@ -2,6 +2,10 @@
 title: "Semi-automated library generation; QTOF LC-MS/MS data"
 format: html
 tbl-cap-location: bottom
+author:
+  - name: Ahlam Mentag
+  - name: Rebecca Dauwe
+  - name: Johannes Rainer
 editor: visual
 date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
 ---
