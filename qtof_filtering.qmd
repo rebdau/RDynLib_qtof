@@ -34,6 +34,7 @@ library(BiocParallel)
 library(Rdisop)
 library(stringr)
 library(dplyr)
+
 register(SerialParam())
 
 pth <- getwd()
@@ -417,27 +418,24 @@ qtof_flax_final <- c(ms2_qtof_sep, ms2_qtof_comb)
 save(qtof_flax_final, file = file.path(pth, "data", "qtof_flax_final.RData"))
 ```
 
+Statistics part:
 
 ```{r}
-library(Spectra)
-library(stringr)
-library(dplyr)
-
 sd <- spectraData(qtof_flax_final) |> as.data.frame()
-
 
 unique(sd$spectrum_type)
 
 # extract energy level (DDA1/DDA2/DDA3) from the file path
 sd$energy <- str_extract(sd$dataOrigin, "DDA[0-9]")
 
-## 1) MS2 spectra count PER ENERGY LEVEL, for spectrum_type == "intersect_single_energy"
+## MS2 spectra count PER ENERGY LEVEL, for spectrum_type == "intersect_single_energy"
 counts_single_energy <- sd %>%
   filter(msLevel == 2, spectrum_type == "same_energy") %>%
   count(energy, name = "n_ms2_spectra")
 
 counts_single_energy
 ```
+
 
 ```{r}
 ## Total MS2 spectra where spectrum_type == "all_energies"
@@ -447,6 +445,8 @@ n_merged_ms2 <- sd %>%
 
 n_merged_ms2
 ```
+
+
 ```{r}
 counts_merged_total <- sd %>%
   filter(msLevel == 2, spectrum_type == "all_energies") %>%
