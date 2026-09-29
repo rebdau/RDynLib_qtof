@@ -284,7 +284,41 @@ The global precursor purities slightly improved. After filtering,
 
 ## Merge spectra within feature_id - collision energy groups
 
-#case 1: different collision energies
+#case 1: If your data were acquired using only a single collision energy
+create a single spectrum for each feature by combining all spectra associated 
+with the same feature_id , keeping only fragments that are present in minimum 
+`minprop` of spectra. We define that peaks need to be present in at least 50% 
+of the spectra, otherwise they are considered noise.
+
+```{r}
+# grouping by feature_id 
+f <- ms2_qtof_precpur$feature_id
+
+ms2_qtof_ftdda <- combineSpectra(
+    ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE,
+    minProp = 0.5, intensityFun = mean, f = f,
+    p = rep(1L, length(ms2_qtof_precpur)))
+```
+
+Combining reduced the number of MS2 spectra from `r length(ms2_qtof_precpur)`
+to `r length(ms2_qtof_ftdda)`.
+
+The number of peaks of the combined MS2 spectra is summarized below
+
+```{r}
+lengths(ms2_qtof_ftdda) |>
+    quantile()
+```
+
+There are thus `sum(lengths(ms2_qtof_ftdda) <= 1)` spectra with one or no peak.
+We need to remove the spectra without available peaks.
+
+```{r}
+ms2_qtof_ftdda <- ms2_qtof_ftdda[lengths(ms2_qtof_ftdda) > 0]
+```
+
+
+#case 2: If the data were acquired using different collision energies
 create a single spectrum for each feature per collision energy, keeping
 only fragments that are present in minimum `minprop` of spectra. We
 define that peaks need to be present in at least 50% of the spectra,
@@ -340,39 +374,6 @@ percentage_after_combining <-
 percentage_after_combining
 ```
 
-#case 2: single collision energy
-create a single spectrum for each feature by combining all spectra associated 
-with the same feature_id , keeping only fragments that are present in minimum 
-`minprop` of spectra. We define that peaks need to be present in at least 50% 
-of the spectra, otherwise they are considered noise.
-
-```{r}
-# grouping by feature_id 
-f <- ms2_qtof_precpur$feature_id
-
-ms2_qtof_ftdda <- combineSpectra(
-    ms2_qtof_precpur, ppm = 5, peaks = "intersect", weighted = TRUE,
-    minProp = 0.5, intensityFun = mean, f = f,
-    p = rep(1L, length(ms2_qtof_precpur)))
-```
-
-Combining reduced the number of MS2 spectra from `r length(ms2_qtof_precpur)`
-to `r length(ms2_qtof_ftdda)`.
-
-The number of peaks of the combined MS2 spectra is summarized below
-
-```{r}
-lengths(ms2_qtof_ftdda) |>
-    quantile()
-```
-
-There are thus `sum(lengths(ms2_qtof_ftdda) <= 1)` spectra with one or no peak.
-We need to remove the spectra without available peaks.
-
-```{r}
-ms2_qtof_ftdda <- ms2_qtof_ftdda[lengths(ms2_qtof_ftdda) > 0]
-```
-
 ## Keep 100 peaks with highest intensity
 
 In contrast to very few peaks, there are also MS2 spectra with a high number of
@@ -416,9 +417,13 @@ sum(lengths(ms2_qtof_sep) == 1)
 save(ms2_qtof_sep, file = file.path(pth, "data", "ms2_qtof_sep.RData"))
 
 ```
+
 N.B.: If your data were acquired using only a single collision energy, 
 then your final object is ms2_qtof_sep.RData (loaded above).
 In this case, do not continue with the rest of the workflow.
+If your data were acquired using multiple collision energies, 
+load the ms2_qtof_sep.RData object and continue with the following
+steps of the workflow.
 
 ## Grouping by feature_id for different collision energies
 
