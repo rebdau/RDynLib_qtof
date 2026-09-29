@@ -493,7 +493,7 @@ unique(sd$spectrum_type)
 # extract energy level (DDA1/DDA2/DDA3) from the file path
 sd$energy <- str_extract(sd$dataOrigin, "DDA[0-9]")
 
-## MS2 spectra count PER ENERGY LEVEL, for spectrum_type == "intersect_single_energy"
+## MS2 spectra count PER ENERGY LEVEL, for spectrum_type == "same_energy"
 counts_single_energy <- sd %>%
   filter(msLevel == 2, spectrum_type == "same_energy") %>%
   count(energy, name = "n_ms2_spectra")
