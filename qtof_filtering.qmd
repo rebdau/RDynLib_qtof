@@ -47,14 +47,13 @@ ftms_preprocessing.qmd file, and convert it to a spectra object
 
 ```{r}
 load(file.path(pth, "data/qtof.RData"))
-
 ```
 
 In case of changing the path to the original mzml files used to create the qtof 
 MsExperiment object please run this chunk and replace the path with the actual
 path of your mzml file:
 ```{r}
-dataStorageBasePath(qtof@spectra) <- "C:/Users/ament/Desktop/Github/RDynLib_qtof/data/mzml"
+dataStorageBasePath(qtof@spectra) <- file.path(pth, "data/mzml") 
 ```
 
 Convert to a spectra object
