@@ -47,8 +47,21 @@ ftms_preprocessing.qmd file, and convert it to a spectra object
 
 ```{r}
 load(file.path(pth, "data/qtof.RData"))
+
+```
+
+In case of changing the path to the original mzml files used to create the qtof 
+MsExperiment object please run this chunk and replace the path with the actual
+path of your mzml file:
+```{r}
+dataStorageBasePath(qtof@spectra) <- "C:/Users/ament/Desktop/Github/RDynLib_qtof/data/mzml"
+```
+
+Convert to a spectra object
+```{r}
 qtof_neg <- spectra(qtof)
 ```
+
 
 ## Calculate Precursor purity
 
@@ -191,6 +204,7 @@ number of detected features
 percentage_assigned <- 
     100 * length(unique(feature_spectra$feature_id)) /
     nrow(featureDefinitions(qtof))
+percentage_assigned
 ```
 
 
@@ -323,6 +337,7 @@ ms2_qtof_ftdda <- ms2_qtof_ftdda[lengths(ms2_qtof_ftdda) > 0]
 percentage_after_combining <- 
     100 * length(unique(ms2_qtof_ftdda$feature_id)) /
     nrow(featureDefinitions(qtof))
+percentage_after_combining
 ```
 
 #case 2: single collision energy
